@@ -14,13 +14,14 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.AssistChipDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.MaterialTheme
@@ -41,21 +42,24 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.nervus.sdk.ui.NervusBackHandler
 import com.nervus.sysui.AppIdentity
+import com.nervus.sysui.NervusIcons
+import com.nervus.sysui.iconForPackage
 import com.nervus.sysui.rememberPolled
 import io.github.nervusos.iface.pkgmanager.v1.PackageInfo
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
-private enum class Page(val label: String) {
-    Packages("已装软件"),
-    Power("电源"),
-    About("关于"),
-    Developer("开发者"),
+private enum class Page(val label: String, val icon: ImageVector) {
+    Packages("已装软件", NervusIcons.Apps),
+    Power("电源", NervusIcons.Power),
+    About("关于", NervusIcons.Info),
+    Developer("开发者", NervusIcons.DeveloperMode),
 }
 
 @Composable
@@ -77,17 +81,31 @@ fun SettingsScreen(settings: Settings) {
     }
 
     Row(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
-        NavigationRail(containerColor = MaterialTheme.colorScheme.surfaceVariant) {
+        NavigationRail(
+            containerColor = MaterialTheme.colorScheme.surface,
+            header = {
+                Text(
+                    "设置",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold,
+                    modifier = Modifier.padding(vertical = 20.dp),
+                )
+            },
+        ) {
             // 开发者入口在解锁前【不出现】——出现但置灰等于直接告诉用户有这个
             // 东西，那就不是彩蛋了
             Page.entries.filter { it != Page.Developer || developerUnlocked }.forEach { p ->
                 NavigationRailItem(
                     selected = page == p,
                     onClick = { navigateTo(p) },
-                    // 没有图标包（materialIconsExtended 单独 37MB，见 ui-common），
-                    // 用首字符代替。真要图标就从 material3 自带的 Icons.Default 里取
-                    icon = { RailGlyph(p.label.first().toString(), page == p) },
+                    icon = {
+                        Icon(
+                            imageVector = p.icon,
+                            contentDescription = p.label,
+                        )
+                    },
                     label = { Text(p.label) },
+                    alwaysShowLabel = true,
                 )
             }
         }
@@ -105,24 +123,6 @@ fun SettingsScreen(settings: Settings) {
                 Page.Developer -> DeveloperPage(settings)
             }
         }
-    }
-}
-
-@Composable
-private fun RailGlyph(text: String, selected: Boolean) {
-    Box(
-        Modifier.size(32.dp).clip(CircleShape).background(
-            if (selected) MaterialTheme.colorScheme.primaryContainer
-            else MaterialTheme.colorScheme.surface
-        ),
-        contentAlignment = Alignment.Center,
-    ) {
-        Text(
-            text,
-            style = MaterialTheme.typography.titleMedium,
-            color = if (selected) MaterialTheme.colorScheme.onPrimaryContainer
-            else MaterialTheme.colorScheme.onSurfaceVariant,
-        )
     }
 }
 
@@ -183,6 +183,12 @@ private fun PackagesPage(settings: Settings) {
                     else -> LazyColumn {
                         items(packages.value, key = { it.packageId }) { info ->
                             ListItem(
+                                leadingContent = {
+                                    PackageGlyph(
+                                        packageId = info.packageId,
+                                        selected = selected == info.packageId,
+                                    )
+                                },
                                 headlineContent = { Text(AppIdentity.displayName(info.packageId)) },
                                 supportingContent = {
                                     Text(
@@ -252,11 +258,24 @@ private fun PackageDetail(
     onUninstall: () -> Unit,
 ) {
     Column(Modifier.fillMaxSize().padding(24.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-        Text(
-            AppIdentity.displayName(info.packageId),
-            style = MaterialTheme.typography.headlineSmall,
-            color = MaterialTheme.colorScheme.onSurface,
-        )
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(14.dp),
+        ) {
+            PackageGlyph(packageId = info.packageId, selected = true, size = 48)
+            Column {
+                Text(
+                    AppIdentity.displayName(info.packageId),
+                    style = MaterialTheme.typography.headlineSmall,
+                    color = MaterialTheme.colorScheme.onSurface,
+                )
+                Text(
+                    info.packageId,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             SourceChip(info.source)
             AssistChip(onClick = {}, label = { Text("trust: ${info.trust}") })
@@ -319,6 +338,35 @@ private fun PackageDetail(
             // UI 原样展示。在这里预判等于制造第二个真相源
             TextButton(onClick = onUninstall) { Text("卸载") }
         }
+    }
+}
+
+@Composable
+private fun PackageGlyph(
+    packageId: String,
+    selected: Boolean,
+    size: Int = 40,
+) {
+    Box(
+        modifier = Modifier
+            .size(size.dp)
+            .clip(RoundedCornerShape((size / 3).dp))
+            .background(
+                if (selected) MaterialTheme.colorScheme.primaryContainer
+                else MaterialTheme.colorScheme.surfaceVariant,
+            ),
+        contentAlignment = Alignment.Center,
+    ) {
+        Icon(
+            imageVector = iconForPackage(packageId),
+            contentDescription = null,
+            tint = if (selected) {
+                MaterialTheme.colorScheme.onPrimaryContainer
+            } else {
+                MaterialTheme.colorScheme.onSurfaceVariant
+            },
+            modifier = Modifier.size((size * 0.56f).dp),
+        )
     }
 }
 

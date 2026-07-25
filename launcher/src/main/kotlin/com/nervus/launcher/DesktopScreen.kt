@@ -14,15 +14,16 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
-import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -37,11 +38,12 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import com.nervus.sdk.ui.NervusBackHandler
 import com.nervus.sysui.AppIdentity
+import com.nervus.sysui.NervusIcons
 import com.nervus.sysui.PowerAction
 import com.nervus.sysui.PowerConfirmDialog
+import com.nervus.sysui.iconForPackage
 import com.nervus.sysui.rememberPolled
 import io.github.nervusos.iface.pkgmanager.v1.PackageInfo
 import kotlinx.coroutines.Dispatchers
@@ -149,36 +151,54 @@ fun DesktopScreen(desktop: Desktop) {
 @Composable
 private fun StatusBar(busy: Boolean, onPower: (PowerAction) -> Unit) {
     Surface(
-        color = MaterialTheme.colorScheme.surfaceVariant,
-        tonalElevation = 3.dp,
+        color = MaterialTheme.colorScheme.surface,
+        tonalElevation = 2.dp,
     ) {
         Column {
             Row(
-                Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 14.dp),
+                Modifier.fillMaxWidth().padding(horizontal = 28.dp, vertical = 10.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceBetween,
             ) {
-                Text(
-                    "Nervus",
-                    style = MaterialTheme.typography.titleLarge,
-                    fontWeight = FontWeight.SemiBold,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(16.dp),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                ) {
+                    Surface(
+                        color = MaterialTheme.colorScheme.primaryContainer,
+                        shape = RoundedCornerShape(12.dp),
+                    ) {
+                        Icon(
+                            imageVector = NervusIcons.Apps,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                            modifier = Modifier.padding(8.dp).size(22.dp),
+                        )
+                    }
+                    Text(
+                        "Nervus",
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.onSurface,
+                    )
+                }
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(4.dp),
                 ) {
                     Clock()
-                    // 文字按钮而不是图标：没有引 materialIconsExtended
-                    // （37 MB，见 ui-common 的说明），material3 自带的
-                    // Icons.Default 里也没有合适的电源图标
-                    TextButton(onClick = { onPower(PowerAction.Reboot) }) {
-                        Text(PowerAction.Reboot.label)
+                    IconButton(onClick = { onPower(PowerAction.Reboot) }) {
+                        Icon(
+                            imageVector = NervusIcons.Restart,
+                            contentDescription = PowerAction.Reboot.label,
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
                     }
-                    TextButton(onClick = { onPower(PowerAction.PowerOff) }) {
-                        Text(
-                            PowerAction.PowerOff.label,
-                            color = MaterialTheme.colorScheme.error,
+                    IconButton(onClick = { onPower(PowerAction.PowerOff) }) {
+                        Icon(
+                            imageVector = NervusIcons.Power,
+                            contentDescription = PowerAction.PowerOff.label,
+                            tint = MaterialTheme.colorScheme.error,
                         )
                     }
                 }
@@ -240,18 +260,23 @@ private fun AppTile(info: PackageInfo, launching: Boolean, onClick: () -> Unit) 
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surface,
         ),
-        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
-        modifier = Modifier.height(150.dp),
+        elevation = CardDefaults.cardElevation(
+            defaultElevation = 1.dp,
+            hoveredElevation = 4.dp,
+            pressedElevation = 2.dp,
+        ),
+        shape = RoundedCornerShape(24.dp),
+        modifier = Modifier.height(160.dp),
     ) {
         Column(
-            Modifier.fillMaxSize().padding(16.dp),
+            Modifier.fillMaxSize().padding(18.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center,
         ) {
-            AppIcon(packageId = info.packageId, label = name, dimmed = launching)
+            AppIcon(packageId = info.packageId, dimmed = launching)
             Text(
                 name,
-                style = MaterialTheme.typography.bodyLarge,
+                style = MaterialTheme.typography.titleMedium,
                 color = MaterialTheme.colorScheme.onSurface,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
@@ -275,14 +300,14 @@ private const val SYSTEM_IMAGE_SOURCE = "system-image"
 /**
  * 应用图标。
  *
- * 目前显示首字母而不是真实图标：`PackageInfo` 里没有 icon 字段，而 manifest
- * 的 icon 又在包内（沙箱下桌面读不到别的包的目录）。真要显示图标，需要让
- * pkgmanager 把图标字节随 List 一起投影出来——见 AppIdentity 的说明。
+ * 内置应用使用稳定的系统图标，其他应用显示通用应用图标。`PackageInfo` 目前
+ * 没有 icon 字段，而 manifest 的 icon 又在包内（沙箱下桌面读不到别的包的
+ * 目录）；以后 pkgmanager 投影真实图标后，这里可以直接替换映射。
  *
  * 颜色由 package_id 稳定派生：同一个应用每次开机颜色一致，用户能靠颜色认它。
  */
 @Composable
-private fun AppIcon(packageId: String, label: String, dimmed: Boolean) {
+private fun AppIcon(packageId: String, dimmed: Boolean) {
     val palette = MaterialTheme.colorScheme
     val colors = listOf(
         palette.primaryContainer,
@@ -298,15 +323,14 @@ private fun AppIcon(packageId: String, label: String, dimmed: Boolean) {
     val idx = Math.floorMod(packageId.hashCode(), colors.size)
 
     Box(
-        Modifier.size(56.dp).clip(CircleShape).background(colors[idx]),
+        Modifier.size(64.dp).clip(RoundedCornerShape(20.dp)).background(colors[idx]),
         contentAlignment = Alignment.Center,
     ) {
-        Text(
-            label.take(1).uppercase(),
-            style = MaterialTheme.typography.headlineSmall,
-            fontSize = 24.sp,
-            fontWeight = FontWeight.Medium,
-            color = if (dimmed) onColors[idx].copy(alpha = 0.4f) else onColors[idx],
+        Icon(
+            imageVector = iconForPackage(packageId),
+            contentDescription = null,
+            tint = if (dimmed) onColors[idx].copy(alpha = 0.4f) else onColors[idx],
+            modifier = Modifier.size(34.dp),
         )
     }
 }
@@ -314,7 +338,16 @@ private fun AppIcon(packageId: String, label: String, dimmed: Boolean) {
 @Composable
 private fun CenteredMessage(title: String, detail: String?) {
     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            Icon(
+                imageVector = NervusIcons.Apps,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.size(44.dp),
+            )
             Text(
                 title,
                 style = MaterialTheme.typography.titleMedium,
@@ -326,7 +359,7 @@ private fun CenteredMessage(title: String, detail: String?) {
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     textAlign = TextAlign.Center,
-                    modifier = Modifier.padding(top = 8.dp),
+                    modifier = Modifier.padding(horizontal = 32.dp),
                 )
             }
         }

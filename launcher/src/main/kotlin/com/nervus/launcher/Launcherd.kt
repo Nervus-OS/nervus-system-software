@@ -7,7 +7,7 @@ import java.util.logging.Logger
 import kotlin.system.exitProcess
 
 /**
- * launcherd：把桌面唤醒并保活的常驻服务。
+ * launcherd：把桌面与右侧系统导航栏唤醒并保活的常驻服务。
  *
  * ⚠ **不要和 `nervus.sessiond` 混淆**：那是另一个东西——管 HUMAN/AI 控制主体
  * 会话、配合 ControlLease `controller_class` 的系统服务（内核保护名单里的
@@ -19,7 +19,7 @@ import kotlin.system.exitProcess
  * （`pkgregistry.ErrLaunchModeTypeMismatch`）。所以桌面自己没法开机自启。
  *
  * launcherd 就干这一件事：always-on 起来，用 `LaunchComponent`（Envelope body 80）
- * 请求内核拉起 `nervus.launcher/desktop`。
+ * 请求内核拉起 `nervus.launcher/desktop` 与 `nervus.launcher/navigation`。
  *
  * 需要 `perm.system.launch`（MinTrust=Platform）——所以它必须是平台签名的
  * 系统镜像包，第三方装不出一个能抢占桌面的会话服务。
@@ -33,10 +33,10 @@ import kotlin.system.exitProcess
  * 崩溃预算烧不完：退避 1s→2s→4s→8s，崩溃时刻约 t=0,1,3,7,15，而熔断阈值是
  * 10 秒窗口内 5 次，指数退避永远凑不满。
  *
- * ## 桌面挂了怎么办
+ * ## 系统界面挂了怎么办
  *
- * [keepDesktopAlive] 定期重新 Resolve。桌面活着时这是一次廉价的查表；
- * 桌面死了则会再次触发拉起。轮询而非事件驱动，是因为 nervud 尚未实现
+ * [keepSystemUiAlive] 定期重新请求桌面与右侧导航栏。组件活着时这是一次廉价
+ * 的查表；死了则会再次触发拉起。轮询而非事件驱动，是因为 nervud 尚未实现
  * Subscribe（发过去会被直接关连接）。
  */
 class Launcherd(config: ComponentConfig) : NervusApp(config) {
@@ -48,29 +48,29 @@ class Launcherd(config: ComponentConfig) : NervusApp(config) {
 
     private val log = Logger.getLogger(Launcherd::class.java.name)
 
-    fun keepDesktopAlive(intervalMs: Long = DESKTOP_CHECK_INTERVAL_MS) {
+    fun keepSystemUiAlive(intervalMs: Long = SYSTEM_UI_CHECK_INTERVAL_MS) {
         while (true) {
-            try {
-                // LaunchComponent 本身幂等：桌面在跑时这是一次廉价的查表，
-                // 不在跑时就地把它拉起来。所以"检测 + 启动"是一次调用而不是两次，
-                // 中间也就不存在"查完到启动之间桌面死了"的窗口
-                val alreadyRunning = launchComponent(DESKTOP_PACKAGE, DESKTOP_COMPONENT)
-                if (!alreadyRunning) {
-                    log.info("desktop was not running; launched it")
+            SYSTEM_UI_COMPONENTS.forEach { component ->
+                try {
+                    // LaunchComponent 本身幂等：组件在跑时这是一次廉价的查表，
+                    // 不在跑时就地把它拉起来。
+                    val alreadyRunning = launchComponent(LAUNCHER_PACKAGE, component)
+                    if (!alreadyRunning) {
+                        log.info("$component was not running; launched it")
+                    }
+                } catch (e: Exception) {
+                    // 一个界面组件失败不能妨碍另一个继续被检查。
+                    log.warning("launch $component failed, will retry: ${e.message}")
                 }
-            } catch (e: Exception) {
-                // 常见原因：桌面正在启动、崩溃退避中、或被停用。
-                // 都不是 launcherd 该处理的问题，记一笔下轮再试
-                log.warning("launch desktop failed, will retry: ${e.message}")
             }
             Thread.sleep(intervalMs)
         }
     }
 
     private companion object {
-        const val DESKTOP_PACKAGE = "nervus.launcher"
-        const val DESKTOP_COMPONENT = "desktop"
-        const val DESKTOP_CHECK_INTERVAL_MS = 5_000L
+        const val LAUNCHER_PACKAGE = "nervus.launcher"
+        const val SYSTEM_UI_CHECK_INTERVAL_MS = 5_000L
+        val SYSTEM_UI_COMPONENTS = listOf("desktop", "navigation")
     }
 }
 
@@ -88,7 +88,7 @@ fun main() {
         exitProcess(1)
     }
 
-    log.info("launcherd: up, waking desktop")
+    log.info("launcherd: up, waking desktop and navigation")
     Runtime.getRuntime().addShutdownHook(Thread { launcherd.close() })
-    launcherd.keepDesktopAlive()
+    launcherd.keepSystemUiAlive()
 }

@@ -69,6 +69,19 @@ nspkg {
         limits.tasksMax = 256
     }
 
+    // ---- navigation：固定在屏幕右侧的系统返回/主页栏 --------------------
+    //
+    // 与 desktop 一样是 manual app，由 launcherd 开机后显式拉起。它不导出接口，
+    // 也不拥有应用业务权限；Back 通过 X11 投递给当前焦点窗口，Home 复用本包已有
+    // 的 perm.system.launch 保证 desktop 存在，再让窗口管理器激活它。
+    components.app("navigation") {
+        mainClass = "com.nervus.launcher.NavigationKt"
+        runtime = "jvm"
+        launchMode = "manual"
+        limits.memoryMaxMb = 192
+        limits.tasksMax = 128
+    }
+
     // ---- launcherd：把桌面唤醒的常驻服务 --------------------------------
     //
     // 【不是】 nervus.sessiond —— 那是管 HUMAN/AI 控制主体会话的另一个系统服务

@@ -24,11 +24,11 @@ dependencies {
         }
     )
     api(compose.material3)
+    testImplementation(libs.kotlin.test)
     // 【不要】加 compose.materialIconsExtended：那一个 jar 就是 37 MB
     // （整包 79 MB 的 47%），装的是全套 Material 图标的矢量定义。
     // Compose Desktop 没有 R8/ProGuard 那样的按需裁剪，加进来就是整包搬走。
     //
-    // 要图标就从 compose.material3 自带的 Icons.Default（几十个常用图标，
-    // 已包含在 material3 里）取；确实需要冷门图标时，单独把那几个的矢量
-    // 数据拷进项目，而不是为几个图标背 37 MB。
+    // 系统 UI 用到的 Material Symbols 矢量路径集中在 NervusIcons.kt，只把
+    // 实际渲染的十几个图标编进包里。
 }

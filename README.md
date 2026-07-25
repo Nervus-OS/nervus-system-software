@@ -7,11 +7,27 @@ Nervus OS 的系统内置应用。Kotlin + Compose Desktop，Material 3。
 
 | 包 | 组件 | 干什么 |
 |---|---|---|
-| `nervus.launcher` | `desktop`(app)<br>`launcherd`(service, always-on) | 桌面 + 唤醒它的常驻服务；状态栏带电源按钮 |
+| `nervus.launcher` | `desktop`(app)<br>`navigation`(app)<br>`launcherd`(service, always-on) | 桌面、右侧系统导航栏及唤醒它们的常驻服务 |
 | `nervus.settings` | `main`(app) | 已装软件 / 电源 / 关于 / 开发者选项 |
 | `nervus.filemanager` | `main`(app) | 共享用户目录的文件管理 |
 
 **要开发新的系统应用，看 [DEVELOPING.md](DEVELOPING.md)。**
+
+## 单窗口与系统导航
+
+镜像里的 Openbox 将普通应用窗口最大化到屏幕右侧 80 px 之外，并把标题为
+`Nervus Navigation` 的无边框窗口固定在最右侧。`launcherd` 会持续保证桌面和
+导航栏两个 app 组件都已启动。
+
+- 「返回」向当前前台窗口发送 `Escape`。`attachComposeDesktop` 把它交给最近注册且
+  启用的 `NervusBackHandler`；应用没有可返回状态时再执行窗口级 fallback。
+- 「主页」确保 `nervus.launcher/desktop` 已启动，然后激活标题为 `Nervus` 的桌面窗口。
+- 普通应用窗口标题应保持为 `AppIdentity.displayName(packageId)`，这样重复点击桌面图标
+  时可以激活已运行窗口，而不是表现成没有响应。
+- 返回和主页只切换窗口或应用状态，不退出进程；组件生命周期仍由 nervud 管理。
+
+窗口管理器与 X11 的安装配置在 `deploy/install-nervus.sh`，现场修复入口是
+`deploy/fix-display.sh`。
 
 ---
 

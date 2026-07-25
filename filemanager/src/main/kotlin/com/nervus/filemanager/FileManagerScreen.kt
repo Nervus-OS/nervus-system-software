@@ -5,18 +5,25 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Button
-import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.FilledTonalButton
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.ListItem
+import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
@@ -31,9 +38,12 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.nervus.sdk.ui.NervusBackHandler
+import com.nervus.sysui.NervusIcons
 import com.nervus.sysui.rememberPolled
 import java.nio.file.Path
 
@@ -88,18 +98,47 @@ fun FileManagerScreen(storageReady: Boolean) {
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
         topBar = {
-            Surface(color = MaterialTheme.colorScheme.surfaceVariant, tonalElevation = 3.dp) {
-                Column {
+            Surface(color = MaterialTheme.colorScheme.surface, tonalElevation = 2.dp) {
+                Row(
+                    Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 14.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                ) {
                     Row(
-                        Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 12.dp),
                         verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.SpaceBetween,
+                        horizontalArrangement = Arrangement.spacedBy(14.dp),
                     ) {
-                        Breadcrumb(dir) { dir = it }
-                        Button(
-                            onClick = { creatingFolder = true },
-                            enabled = storageReady,
-                        ) { Text("新建文件夹") }
+                        Surface(
+                            color = MaterialTheme.colorScheme.primaryContainer,
+                            shape = RoundedCornerShape(14.dp),
+                        ) {
+                            Icon(
+                                imageVector = NervusIcons.Folder,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                                modifier = Modifier.padding(9.dp).size(24.dp),
+                            )
+                        }
+                        Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                            Text(
+                                "文件",
+                                style = MaterialTheme.typography.titleLarge,
+                                fontWeight = FontWeight.SemiBold,
+                            )
+                            Breadcrumb(dir) { dir = it }
+                        }
+                    }
+                    FilledTonalButton(
+                        onClick = { creatingFolder = true },
+                        enabled = storageReady,
+                    ) {
+                        Icon(
+                            imageVector = NervusIcons.CreateFolder,
+                            contentDescription = null,
+                            modifier = Modifier.size(20.dp),
+                        )
+                        Spacer(Modifier.width(8.dp))
+                        Text("新建文件夹")
                     }
                 }
             }
@@ -112,37 +151,69 @@ fun FileManagerScreen(storageReady: Boolean) {
                     "${UserStorage.ROOT}\n" +
                         "检查两件事：manifest 是否声明了 perm.storage.user；" +
                         "以及 nervud 的 preflight 是否建好了这个目录（01777）。",
+                    NervusIcons.Info,
                 )
 
                 entries.value.isEmpty() && entries.error != null ->
-                    Message("读不了这个目录", entries.error)
+                    Message("读不了这个目录", entries.error, NervusIcons.Info)
 
                 entries.value.isEmpty() ->
-                    Message("这里是空的", "用右上角新建一个文件夹")
+                    Message("这里是空的", "用右上角新建一个文件夹", NervusIcons.Folder)
 
-                else -> LazyColumn(Modifier.fillMaxSize()) {
+                else -> LazyColumn(
+                    modifier = Modifier.fillMaxSize(),
+                    contentPadding = PaddingValues(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
                     items(entries.value, key = { it.path.toString() }) { entry ->
-                        ListItem(
-                            leadingContent = { TypeGlyph(entry.isDirectory) },
-                            headlineContent = { Text(entry.name) },
-                            supportingContent = {
-                                Text(
-                                    if (entry.isDirectory) "文件夹"
-                                    else UserStorage.humanSize(entry.sizeBytes),
-                                    style = MaterialTheme.typography.bodySmall,
-                                )
-                            },
-                            trailingContent = {
-                                Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                                    TextButton(onClick = { renaming = entry }) { Text("重命名") }
-                                    TextButton(onClick = { pendingDelete = entry }) { Text("删除") }
-                                }
-                            },
-                            modifier = Modifier.clickable(enabled = entry.isDirectory) {
-                                dir = entry.path
-                            },
-                        )
-                        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                        Card(
+                            colors = CardDefaults.cardColors(
+                                containerColor = MaterialTheme.colorScheme.surface,
+                            ),
+                            elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
+                            shape = RoundedCornerShape(18.dp),
+                        ) {
+                            ListItem(
+                                leadingContent = { TypeGlyph(entry.isDirectory) },
+                                headlineContent = {
+                                    Text(
+                                        entry.name,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis,
+                                    )
+                                },
+                                supportingContent = {
+                                    Text(
+                                        if (entry.isDirectory) "文件夹"
+                                        else UserStorage.humanSize(entry.sizeBytes),
+                                        style = MaterialTheme.typography.bodySmall,
+                                    )
+                                },
+                                trailingContent = {
+                                    Row(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+                                        IconButton(onClick = { renaming = entry }) {
+                                            Icon(
+                                                imageVector = NervusIcons.Edit,
+                                                contentDescription = "重命名 ${entry.name}",
+                                            )
+                                        }
+                                        IconButton(onClick = { pendingDelete = entry }) {
+                                            Icon(
+                                                imageVector = NervusIcons.Delete,
+                                                contentDescription = "删除 ${entry.name}",
+                                                tint = MaterialTheme.colorScheme.error,
+                                            )
+                                        }
+                                    }
+                                },
+                                colors = ListItemDefaults.colors(
+                                    containerColor = MaterialTheme.colorScheme.surface,
+                                ),
+                                modifier = Modifier.clickable(enabled = entry.isDirectory) {
+                                    dir = entry.path
+                                },
+                            )
+                        }
                     }
                 }
             }
@@ -218,15 +289,25 @@ private fun Breadcrumb(dir: Path, onNavigate: (Path) -> Unit) {
     Row(verticalAlignment = Alignment.CenterVertically) {
         UserStorage.breadcrumb(dir).forEachIndexed { i, (label, path) ->
             if (i > 0) {
-                Text(
-                    " / ",
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    style = MaterialTheme.typography.titleMedium,
+                Icon(
+                    imageVector = NervusIcons.ChevronRight,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.size(16.dp),
                 )
+            }
+            if (i == 0) {
+                Icon(
+                    imageVector = NervusIcons.Home,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.size(16.dp),
+                )
+                Spacer(Modifier.width(4.dp))
             }
             Text(
                 label,
-                style = MaterialTheme.typography.titleMedium,
+                style = MaterialTheme.typography.bodySmall,
                 fontWeight = if (path == dir) FontWeight.SemiBold else FontWeight.Normal,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.clickable(enabled = path != dir) { onNavigate(path) },
@@ -235,25 +316,21 @@ private fun Breadcrumb(dir: Path, onNavigate: (Path) -> Unit) {
     }
 }
 
-/**
- * 文件/文件夹的图标位。
- *
- * 用色块而不是图标字体：materialIconsExtended 单独 37MB（见 ui-common 的说明），
- * 为两个图标背这个体积不值得。
- */
 @Composable
 private fun TypeGlyph(isDirectory: Boolean) {
     Box(
-        Modifier.size(36.dp).clip(RoundedCornerShape(8.dp)).background(
+        Modifier.size(44.dp).clip(RoundedCornerShape(13.dp)).background(
             if (isDirectory) MaterialTheme.colorScheme.primaryContainer
-            else MaterialTheme.colorScheme.surfaceVariant
+            else MaterialTheme.colorScheme.tertiaryContainer
         ),
         contentAlignment = Alignment.Center,
     ) {
-        Text(
-            if (isDirectory) "▣" else "▤",
-            color = if (isDirectory) MaterialTheme.colorScheme.onPrimaryContainer
-            else MaterialTheme.colorScheme.onSurfaceVariant,
+        Icon(
+            imageVector = if (isDirectory) NervusIcons.Folder else NervusIcons.File,
+            contentDescription = if (isDirectory) "文件夹" else "文件",
+            tint = if (isDirectory) MaterialTheme.colorScheme.onPrimaryContainer
+            else MaterialTheme.colorScheme.onTertiaryContainer,
+            modifier = Modifier.size(24.dp),
         )
     }
 }
@@ -299,16 +376,25 @@ private fun NameDialog(
 }
 
 @Composable
-private fun Message(title: String, detail: String?) {
+private fun Message(title: String, detail: String?, icon: ImageVector) {
     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            Icon(
+                imageVector = icon,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.size(52.dp),
+            )
             Text(title, style = MaterialTheme.typography.titleMedium)
             detail?.let {
                 Text(
                     it,
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(top = 8.dp, start = 32.dp, end = 32.dp),
+                    modifier = Modifier.padding(horizontal = 32.dp),
                 )
             }
         }

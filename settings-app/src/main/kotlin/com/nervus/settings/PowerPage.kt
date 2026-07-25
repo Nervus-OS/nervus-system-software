@@ -8,10 +8,13 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
@@ -21,9 +24,11 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.nervus.sdk.ui.NervusBackHandler
+import com.nervus.sysui.NervusIcons
 import com.nervus.sysui.PowerAction
 import com.nervus.sysui.PowerConfirmDialog
 import kotlinx.coroutines.Dispatchers
@@ -76,32 +81,64 @@ fun PowerPage(settings: Settings) {
                     containerColor = MaterialTheme.colorScheme.primaryContainer,
                 ),
             ) {
-                Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    Text(
-                        "${current.label}请求已发出",
-                        style = MaterialTheme.typography.titleMedium,
-                        color = MaterialTheme.colorScheme.onPrimaryContainer,
+                Row(
+                    Modifier.padding(20.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(16.dp),
+                ) {
+                    Icon(
+                        imageVector = if (current == PowerAction.Reboot) {
+                            NervusIcons.Restart
+                        } else {
+                            NervusIcons.Power
+                        },
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                        modifier = Modifier.size(32.dp),
                     )
-                    Text(
-                        "系统正在停止各个组件，屏幕稍后会熄灭。",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onPrimaryContainer,
-                    )
+                    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        Text(
+                            "${current.label}请求已发出",
+                            style = MaterialTheme.typography.titleMedium,
+                            color = MaterialTheme.colorScheme.onPrimaryContainer,
+                        )
+                        Text(
+                            "系统正在停止各个组件，屏幕稍后会熄灭。",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onPrimaryContainer,
+                        )
+                    }
                 }
             }
         } else {
             Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                OutlinedButton(onClick = { pending = PowerAction.Reboot }) {
+                OutlinedButton(
+                    onClick = { pending = PowerAction.Reboot },
+                    modifier = Modifier.height(52.dp),
+                ) {
+                    Icon(
+                        imageVector = NervusIcons.Restart,
+                        contentDescription = null,
+                        modifier = Modifier.size(20.dp),
+                    )
+                    Spacer(Modifier.width(8.dp))
                     Text(PowerAction.Reboot.label)
                 }
                 Button(
                     onClick = { pending = PowerAction.PowerOff },
+                    modifier = Modifier.height(52.dp),
                     // error 配色：关机是破坏性动作，M3 用 error 容器表达
                     colors = ButtonDefaults.buttonColors(
                         containerColor = MaterialTheme.colorScheme.error,
                         contentColor = MaterialTheme.colorScheme.onError,
                     ),
                 ) {
+                    Icon(
+                        imageVector = NervusIcons.Power,
+                        contentDescription = null,
+                        modifier = Modifier.size(20.dp),
+                    )
+                    Spacer(Modifier.width(8.dp))
                     Text(PowerAction.PowerOff.label)
                 }
             }
