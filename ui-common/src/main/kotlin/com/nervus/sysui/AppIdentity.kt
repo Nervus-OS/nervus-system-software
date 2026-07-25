@@ -58,6 +58,7 @@ object AppIdentity {
         "nervus.filemanager" to "文件",
         "nervus.pkgmanagerd" to "软件包服务",
         "nervus.sessiond" to "会话服务",
+        "nervus.launcher" to "桌面",
         "nervus.permissionui" to "权限确认",
         "nervus.safety.recovery" to "安全恢复",
     )

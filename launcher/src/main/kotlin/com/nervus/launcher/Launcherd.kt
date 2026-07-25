@@ -7,14 +7,18 @@ import java.util.logging.Logger
 import kotlin.system.exitProcess
 
 /**
- * sessiond：把桌面唤醒的常驻服务。
+ * launcherd：把桌面唤醒并保活的常驻服务。
+ *
+ * ⚠ **不要和 `nervus.sessiond` 混淆**：那是另一个东西——管 HUMAN/AI 控制主体
+ * 会话、配合 ControlLease `controller_class` 的系统服务（内核保护名单里的
+ * `nervus.sessiond/main`），与桌面无关。
  *
  * ## 它为什么存在
  *
  * 桌面是个 app，而内核硬校验 **app 不能 always-on**
  * （`pkgregistry.ErrLaunchModeTypeMismatch`）。所以桌面自己没法开机自启。
  *
- * sessiond 就干这一件事：always-on 起来，用 `LaunchComponent`（Envelope body 80）
+ * launcherd 就干这一件事：always-on 起来，用 `LaunchComponent`（Envelope body 80）
  * 请求内核拉起 `nervus.launcher/desktop`。
  *
  * 需要 `perm.system.launch`（MinTrust=Platform）——所以它必须是平台签名的
@@ -35,14 +39,14 @@ import kotlin.system.exitProcess
  * 桌面死了则会再次触发拉起。轮询而非事件驱动，是因为 nervud 尚未实现
  * Subscribe（发过去会被直接关连接）。
  */
-class Sessiond(config: ComponentConfig) : NervusApp(config) {
+class Launcherd(config: ComponentConfig) : NervusApp(config) {
 
     // 不在 requiredInterfaces 里声明桌面接口：那批在 start() 里解析，一旦失败
-    // 整个组件启动失败。而"桌面暂时拉不起来"不该让 sessiond 也起不来——
-    // sessiond 活着才有人继续尝试。改为 start 之后自己按节奏 resolveNow
+    // 整个组件启动失败。而"桌面暂时拉不起来"不该让 launcherd 也起不来——
+    // launcherd 活着才有人继续尝试。改为 start 之后自己按节奏 resolveNow
     override val requiredInterfaces: List<InterfaceRequirement> = emptyList()
 
-    private val log = Logger.getLogger(Sessiond::class.java.name)
+    private val log = Logger.getLogger(Launcherd::class.java.name)
 
     fun keepDesktopAlive(intervalMs: Long = DESKTOP_CHECK_INTERVAL_MS) {
         while (true) {
@@ -56,7 +60,7 @@ class Sessiond(config: ComponentConfig) : NervusApp(config) {
                 }
             } catch (e: Exception) {
                 // 常见原因：桌面正在启动、崩溃退避中、或被停用。
-                // 都不是 sessiond 该处理的问题，记一笔下轮再试
+                // 都不是 launcherd 该处理的问题，记一笔下轮再试
                 log.warning("launch desktop failed, will retry: ${e.message}")
             }
             Thread.sleep(intervalMs)
@@ -71,20 +75,20 @@ class Sessiond(config: ComponentConfig) : NervusApp(config) {
 }
 
 fun main() {
-    val log = Logger.getLogger("sessiond")
-    val sessiond = Sessiond(ComponentConfig(componentId = "sessiond"))
+    val log = Logger.getLogger("launcherd")
+    val launcherd = Launcherd(ComponentConfig(componentId = "launcherd"))
 
     try {
-        sessiond.start()
+        launcherd.start()
     } catch (e: Exception) {
         // 连不上控制面就退出，交给 supervisor 退避重启。
         // 组件被拉起时 ipc 模块可能还没 listen（service 注册在第 8 位、ipc 在第 12 位），
         // 这个竞态是预期内的，退避重启就能过
-        log.severe("sessiond: cannot reach control plane: ${e.message}")
+        log.severe("launcherd: cannot reach control plane: ${e.message}")
         exitProcess(1)
     }
 
-    log.info("sessiond: up, waking desktop")
-    Runtime.getRuntime().addShutdownHook(Thread { sessiond.close() })
-    sessiond.keepDesktopAlive()
+    log.info("launcherd: up, waking desktop")
+    Runtime.getRuntime().addShutdownHook(Thread { launcherd.close() })
+    launcherd.keepDesktopAlive()
 }
