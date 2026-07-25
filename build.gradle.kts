@@ -31,4 +31,29 @@ extra["nervusAbi"] = nervusAbi
 subprojects {
     group = "com.nervus.system"
     version = "0.1.0"
+
+    // 剔除【非目标平台】的 skiko 原生库。
+    //
+    // Compose 的 ui-desktop 会按 Gradle 变体解析自动带上一份**构建机平台**的
+    // skiko-awt-runtime，而我们显式声明的目标平台那份是叠加上去的 —— 结果是
+    // 交叉构建出的包里两份都在。x64 那份 13 MB，在 arm64 机器上纯属死重量。
+    //
+    // 更麻烦的是它不报错也不影响运行，只是白占空间，很容易一直留着没人发现。
+    // 交叉构建时实测：arm64 包 43 个 jar，x86_64 包 42 个，多出来的就是它。
+    configurations.all {
+        val keep = when (nervusAbi) {
+            "linux-arm64" -> "skiko-awt-runtime-linux-arm64"
+            "linux-x86_64" -> "skiko-awt-runtime-linux-x64"
+            else -> null
+        }
+        if (keep != null) {
+            listOf(
+                "skiko-awt-runtime-linux-x64",
+                "skiko-awt-runtime-linux-arm64",
+                "skiko-awt-runtime-macos-x64",
+                "skiko-awt-runtime-macos-arm64",
+                "skiko-awt-runtime-windows-x64",
+            ).filter { it != keep }.forEach { exclude(group = "org.jetbrains.skiko", module = it) }
+        }
+    }
 }
