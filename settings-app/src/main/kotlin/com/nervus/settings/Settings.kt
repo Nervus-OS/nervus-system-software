@@ -5,6 +5,8 @@ import com.nervus.sdk.component.ComponentConfig
 import com.nervus.sdk.component.InterfaceRequirement
 import com.nervus.sdk.component.NervusApp
 import com.nervus.sdk.ui.attachComposeDesktop
+import com.nervus.sysui.PowerAction
+import com.nervus.sysui.PowerControl
 import io.github.nervusos.iface.pkgmanager.v1.ListRequest
 import io.github.nervusos.iface.pkgmanager.v1.ListResult
 import io.github.nervusos.iface.pkgmanager.v1.PackageInfo
@@ -16,7 +18,7 @@ import kotlin.system.exitProcess
 /**
  * 设置应用。
  *
- * 全部能力来自 `nervus.interface.pkgmanager` 的四个方法。**它自己不做任何裁决**
+ * 全部能力来自 `nervus.interface.pkg.manager` 的四个方法。**它自己不做任何裁决**
  * ——列出什么、能不能卸载、能不能停用，全由 nervud 决定，本应用只负责把结果
  * 显示出来、把用户的意图转成一次调用。
  *
@@ -32,7 +34,13 @@ class Settings(config: ComponentConfig) : NervusApp(config) {
             // 非必需：pkgmanagerd 可能还没起来（系统服务启动顺序随机）。
             // 设置界面仍应打开并解释原因，而不是整个组件启动失败
             isRequired = false,
-        )
+        ),
+        InterfaceRequirement(
+            id = PowerControl.INTERFACE_ID,
+            // 也非必需：这是内建接口，nervud 活着它就在，理论上不会解析失败。
+            // 但「电源按钮解析不到」不该让整个设置打不开——用户还有别的事要做
+            isRequired = false,
+        ),
     )
 
     private val log = Logger.getLogger(Settings::class.java.name)
@@ -80,21 +88,43 @@ class Settings(config: ComponentConfig) : NervusApp(config) {
                 .toByteArray(),
         )
     }
+
+    /**
+     * 发起一次有序电源动作（重启 / 关机）。
+     *
+     * 「有序」是关键：内核经 systemd 走完整的 `shutdown.target`，正在跑的组件
+     * 收得到 SIGTERM、有机会落盘、文件系统正常卸载。等价于在终端敲
+     * `systemctl reboot`，而**不是** `reboot(2)` 硬重启（那条路是故障恢复用的，
+     * 只给 platform-release 签的包，见内核 `perm.authority.reboot`）。
+     *
+     * 这个调用**正常情况下不会正常返回**：systemd 收到后立刻开始停机，控制面
+     * 连接随之断开。因此调用方看到异常不代表没重启——UI 侧一律按「已发出」处理，
+     * 不要因为抛异常就提示失败，那会让用户以为没生效而反复点。
+     */
+    fun power(action: PowerAction) {
+        log.info("power action requested: ${action.label}")
+        call(
+            interfaceId = PowerControl.INTERFACE_ID,
+            methodId = action.methodId,
+            payload = ByteArray(0),
+        )
+    }
 }
 
 /**
- * `nervus.interface.pkgmanager` 的方法 ID。
+ * `nervus.interface.pkg.manager` 的方法 ID。
  *
  * 取值来自 `nervus-ipc` 的 `PackageManagerMethod` 枚举，**以 proto 为准**。
  * 写错的后果是一个准确的 NOT_FOUND，不会静默调到别的方法上。
  */
 object PkgManager {
-    const val INTERFACE_ID = "nervus.interface.pkgmanager"
+    const val INTERFACE_ID = "nervus.interface.pkg.manager"
     const val INSTALL = 1
     const val UNINSTALL = 2
     const val LIST = 3
     const val SET_COMPONENT_ENABLED = 4
 }
+
 
 fun main() {
     val log = Logger.getLogger("settings")

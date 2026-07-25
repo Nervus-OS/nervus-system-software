@@ -5,7 +5,7 @@ import io.github.nervusos.iface.pkgmanager.v1.ListResult
 import io.github.nervusos.iface.pkgmanager.v1.PackageInfo
 
 /**
- * `nervus.interface.pkgmanager` 的方法 ID。
+ * `nervus.interface.pkg.manager` 的方法 ID。
  *
  * 取值来自 `nervus-ipc/proto/nervus/interface/pkgmanager/v1/pkg_manager.proto`
  * 的 `PackageManagerMethod` 枚举，**以 proto 为准**——那里的 `method_meta.method_id`
@@ -17,7 +17,7 @@ import io.github.nervusos.iface.pkgmanager.v1.PackageInfo
  * 调用会得到一个准确的 NOT_FOUND，不会静默走错方法。
  */
 object PkgManagerMethods {
-    const val INTERFACE_ID = "nervus.interface.pkgmanager"
+    const val INTERFACE_ID = "nervus.interface.pkg.manager"
 
     const val INSTALL = 1
     const val UNINSTALL = 2

@@ -5,7 +5,7 @@ package com.nervus.sysui
  *
  * ## 为什么是约定而不是读 manifest
  *
- * 启动器拿到的应用列表来自 `nervus.interface.pkgmanager` 的 LIST，而它的
+ * 启动器拿到的应用列表来自 `nervus.interface.pkg.manager` 的 LIST，而它的
  * `PackageInfo` 目前**只有** package_id / version / trust / source /
  * granted_permissions / disabled_components —— 没有 label、没有 icon、
  * 也没有「这个包的哪个组件能被点开、对应哪个接口」。

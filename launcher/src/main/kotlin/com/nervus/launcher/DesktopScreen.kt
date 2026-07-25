@@ -22,6 +22,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -38,6 +39,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.nervus.sysui.AppIdentity
+import com.nervus.sysui.PowerAction
+import com.nervus.sysui.PowerConfirmDialog
 import com.nervus.sysui.rememberPolled
 import io.github.nervusos.iface.pkgmanager.v1.PackageInfo
 import kotlinx.coroutines.Dispatchers
@@ -56,10 +59,17 @@ fun DesktopScreen(desktop: Desktop) {
 
     var launching by remember { mutableStateOf<String?>(null) }
     var launchError by remember { mutableStateOf<String?>(null) }
+    // 电源确认框。发出后不复位——机器正在关，界面状态已经无关紧要
+    var pendingPower by remember { mutableStateOf<PowerAction?>(null) }
     val scope = rememberCoroutineScope()
 
     Scaffold(
-        topBar = { StatusBar(busy = apps.loading || launching != null) },
+        topBar = {
+            StatusBar(
+                busy = apps.loading || launching != null,
+                onPower = { pendingPower = it },
+            )
+        },
         containerColor = MaterialTheme.colorScheme.background,
     ) { padding ->
         Box(Modifier.fillMaxSize().padding(padding)) {
@@ -107,10 +117,29 @@ fun DesktopScreen(desktop: Desktop) {
             }
         }
     }
+
+    pendingPower?.let { action ->
+        PowerConfirmDialog(
+            action = action,
+            onDismiss = { pendingPower = null },
+            onConfirm = {
+                pendingPower = null
+                scope.launch {
+                    // 阻塞到连接断开，必须离开 UI 线程
+                    withContext(Dispatchers.IO) {
+                        // 失败大概率就是「连接已断开」，也就是成功的样子。
+                        // 桌面上没有合适的位置解释这件事，静默即可——
+                        // 真没关成的话，用户看到桌面还在，会再点一次
+                        runCatching { desktop.power(action) }
+                    }
+                }
+            },
+        )
+    }
 }
 
 @Composable
-private fun StatusBar(busy: Boolean) {
+private fun StatusBar(busy: Boolean, onPower: (PowerAction) -> Unit) {
     Surface(
         color = MaterialTheme.colorScheme.surfaceVariant,
         tonalElevation = 3.dp,
@@ -127,7 +156,24 @@ private fun StatusBar(busy: Boolean) {
                     fontWeight = FontWeight.SemiBold,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
-                Clock()
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(16.dp),
+                ) {
+                    Clock()
+                    // 文字按钮而不是图标：没有引 materialIconsExtended
+                    // （37 MB，见 ui-common 的说明），material3 自带的
+                    // Icons.Default 里也没有合适的电源图标
+                    TextButton(onClick = { onPower(PowerAction.Reboot) }) {
+                        Text(PowerAction.Reboot.label)
+                    }
+                    TextButton(onClick = { onPower(PowerAction.PowerOff) }) {
+                        Text(
+                            PowerAction.PowerOff.label,
+                            color = MaterialTheme.colorScheme.error,
+                        )
+                    }
+                }
             }
             // 进度条只占 2dp 且常驻布局位置：用可见性而不是插入/移除组件来表达忙碌，
             // 否则每次刷新整个网格会上下跳 2 像素

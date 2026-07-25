@@ -51,6 +51,7 @@ import kotlinx.coroutines.withContext
 
 private enum class Page(val label: String) {
     Packages("已装软件"),
+    Power("电源"),
     About("关于"),
     Developer("开发者"),
 }
@@ -80,6 +81,7 @@ fun SettingsScreen(settings: Settings) {
         Box(Modifier.fillMaxSize()) {
             when (page) {
                 Page.Packages -> PackagesPage(settings)
+                Page.Power -> PowerPage(settings)
                 Page.About -> AboutPage(
                     developerUnlocked = developerUnlocked,
                     onUnlock = {
