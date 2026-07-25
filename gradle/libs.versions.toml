@@ -1,0 +1,17 @@
+[versions]
+# 与 nervus-app-sdk / nervus-app-example 保持一致。三边不一致会让 SDK 编译出的
+# 类和应用引用的类分属两个 Kotlin/Compose 版本，症状是运行期 NoSuchMethodError
+kotlin = "2.1.0"
+coroutines = "1.9.0"
+compose = "1.7.3"
+protobuf = "4.29.3"
+
+[libraries]
+kotlinx-coroutines-core = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-core", version.ref = "coroutines" }
+kotlin-test = { module = "org.jetbrains.kotlin:kotlin-test", version.ref = "kotlin" }
+protobuf-java = { module = "com.google.protobuf:protobuf-java", version.ref = "protobuf" }
+
+[plugins]
+kotlin-jvm = { id = "org.jetbrains.kotlin.jvm", version.ref = "kotlin" }
+kotlin-compose = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }
+compose = { id = "org.jetbrains.compose", version.ref = "compose" }

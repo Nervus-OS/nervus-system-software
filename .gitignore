@@ -1,0 +1,11 @@
+build/
+.gradle/
+.kotlin/
+out/
+*.log
+.idea/*
+.idea
+
+# 签名私钥绝不进仓库
+signing/*.pem
+signing/*.key

@@ -1,0 +1,12 @@
+# gradlew 是 POSIX shell 脚本，行尾【必须】是 LF。
+#
+# 不加这条会踩一个排查成本很高的坑：Windows 上 checkout 得到 CRLF 的 gradlew，
+# 在 WSL/Linux 里执行时报的是
+#     ./gradlew: cannot execute: required file not found
+# —— 这句话看起来像"文件不存在"，实际是 shebang 行尾多了个 \r，内核找不到
+# 名为 "/bin/sh\r" 的解释器。已经在本仓库的兄弟仓库里真实发生过。
+gradlew text eol=lf
+*.sh text eol=lf
+
+# wrapper jar 是二进制，任何行尾转换都会损坏它
+gradle-wrapper.jar binary
