@@ -7,6 +7,7 @@ import com.nervus.sdk.component.NervusApp
 import com.nervus.sdk.ui.attachComposeDesktop
 import com.nervus.sysui.PowerAction
 import com.nervus.sysui.PowerControl
+import com.nervus.sysui.X11WindowControl
 import io.github.nervusos.iface.pkgmanager.v1.ListRequest
 import io.github.nervusos.iface.pkgmanager.v1.ListResult
 import io.github.nervusos.iface.pkgmanager.v1.PackageInfo
@@ -143,6 +144,7 @@ fun main() {
         title = "设置",
         width = 1100.dp,
         height = 760.dp,
+        onUnhandledBack = X11WindowControl::hideActiveWindow,
         onDisconnect = {
             log.severe("settings: control plane lost, exiting")
             exitProcess(1)

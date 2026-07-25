@@ -193,9 +193,9 @@ digest、分配 UID，然后按 `launch_mode` 决定什么时候起哪个组件�
 内核硬校验这条：`app` 不能 `always-on`，`service` 不能 `manual`
 （`pkgregistry/manifest.go` 的 `ErrLaunchModeTypeMismatch`）。
 
-所以**桌面这类"有界面但要开机自启"的东西必须拆成两个组件**：一个
-`always-on` 的 service 负责唤醒，一个 `manual` 的 app 是界面本体。
-`nervus.launcher` 就是这么做的（`launcherd` + `desktop`）。
+所以**桌面这类"有界面但要开机自启"的东西必须拆开**：一个 `always-on` 的
+service 负责唤醒，一个或多个 `manual` 的 app 是界面本体。`nervus.launcher`
+就是这么做的（`launcherd` 唤醒 `desktop` 和 `navigation`）。
 
 ### 2.2 每个组件是一个独立进程
 
@@ -613,6 +613,28 @@ fun main() = application {
 
 因为 §2.4 的握手核对，**没有别的办法在开发机上单独跑一个组件**。
 
+### 8.4 接入系统「返回」
+
+右侧系统导航栏会向当前前台 X11 窗口发送 `Escape`。使用
+`attachComposeDesktop` 的应用不用自己监听键盘，只需在当前页面注册处理器：
+
+```kotlin
+NervusBackHandler(enabled = dialogOpen || currentDirectory != rootDirectory) {
+    when {
+        dialogOpen -> dialogOpen = false
+        currentDirectory != rootDirectory -> currentDirectory = currentDirectory.parent
+    }
+}
+```
+
+同一窗口里可以嵌套多个处理器；最近注册且 `enabled` 的处理器优先。页面没有可返回
+状态时，由 `attachComposeDesktop(onUnhandledBack = { ... })` 的根 fallback 决定
+怎么处理。系统内置应用目前用它隐藏当前根窗口、露出下层窗口，桌面则直接消费返回。
+
+应用被再次从桌面启动时，nervud 会返回 `alreadyRunning`。桌面随后按窗口标题激活
+现有窗口，因此内置应用的标题必须保持为 `AppIdentity.displayName(packageId)`。
+不要用退出进程实现返回或主页；进程生命周期仍由 nervud 管理。
+
 ---
 
 ## 9. 构建、签名、部署
@@ -819,7 +841,7 @@ trust 的序是 `Ordinary < OEM < Platform`，判据是 `trust < entry.MinTrust`
 |---|---|
 | 最简单的带界面 app | `filemanager/` —— 一个组件、一个权限 |
 | 调系统接口 + 多页面导航 | `settings-app/` —— NavigationRail、pkgmanager 四个方法、电源 |
-| app + always-on service 双组件 | `launcher/` —— `desktop` + `launcherd`，以及怎么唤醒界面 |
+| app + always-on service | `launcher/` —— `desktop` / `navigation` + `launcherd`，以及怎么唤醒多个界面 |
 | 沙箱内的文件操作 | `filemanager/UserStorage.kt` —— 路径规范化 + 逃逸检查 |
 | 轮询与状态 | `ui-common/Polling.kt` |
 

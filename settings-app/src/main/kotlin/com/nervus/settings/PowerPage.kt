@@ -23,6 +23,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import com.nervus.sdk.ui.NervusBackHandler
 import com.nervus.sysui.PowerAction
 import com.nervus.sysui.PowerConfirmDialog
 import kotlinx.coroutines.Dispatchers
@@ -48,6 +49,10 @@ fun PowerPage(settings: Settings) {
     // 已发出后不再回到可点击状态：机器正在关，界面上再放一个能点的按钮没有意义
     var issued by remember { mutableStateOf<PowerAction?>(null) }
     var diagnostic by remember { mutableStateOf<String?>(null) }
+
+    NervusBackHandler(enabled = pending != null) {
+        pending = null
+    }
 
     Column(
         Modifier.fillMaxSize().padding(32.dp),

@@ -8,6 +8,7 @@ import com.nervus.sdk.ui.attachComposeDesktop
 import com.nervus.sysui.AppIdentity
 import com.nervus.sysui.PowerAction
 import com.nervus.sysui.PowerControl
+import com.nervus.sysui.X11WindowControl
 import io.github.nervusos.iface.pkgmanager.v1.PackageInfo
 import java.util.logging.Logger
 import kotlin.system.exitProcess
@@ -73,6 +74,11 @@ class Desktop(config: ComponentConfig) : NervusApp(config) {
         val alreadyRunning = launchComponent(packageId, componentId)
         if (alreadyRunning) {
             log.info("$packageId/$componentId was already running")
+            if (!X11WindowControl.activateWindow(AppIdentity.displayName(packageId))) {
+                throw IllegalStateException(
+                    "$packageId/$componentId is running but its window cannot be activated"
+                )
+            }
         }
     }
 
@@ -116,6 +122,9 @@ fun main() {
         title = "Nervus",
         width = 1280.dp,
         height = 800.dp,
+        // The desktop is the root of the UI task. Back at this level is consumed
+        // instead of cycling to an application behind the home screen.
+        onUnhandledBack = { true },
         onDisconnect = {
             // 控制面断了就退出，让 supervisor 重启。留一个连不上内核的空窗口
             // 比没有窗口更糟：它看起来正常，实际什么都点不动

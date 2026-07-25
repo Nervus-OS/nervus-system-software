@@ -5,6 +5,7 @@ import com.nervus.sdk.component.ComponentConfig
 import com.nervus.sdk.component.InterfaceRequirement
 import com.nervus.sdk.component.NervusApp
 import com.nervus.sdk.ui.attachComposeDesktop
+import com.nervus.sysui.X11WindowControl
 import java.util.logging.Logger
 import kotlin.system.exitProcess
 
@@ -55,6 +56,7 @@ fun main() {
         title = "文件",
         width = 1000.dp,
         height = 700.dp,
+        onUnhandledBack = X11WindowControl::hideActiveWindow,
         onDisconnect = {
             log.severe("filemanager: control plane lost, exiting")
             exitProcess(1)

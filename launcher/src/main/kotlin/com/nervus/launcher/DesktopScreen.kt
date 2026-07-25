@@ -38,6 +38,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.nervus.sdk.ui.NervusBackHandler
 import com.nervus.sysui.AppIdentity
 import com.nervus.sysui.PowerAction
 import com.nervus.sysui.PowerConfirmDialog
@@ -62,6 +63,13 @@ fun DesktopScreen(desktop: Desktop) {
     // 电源确认框。发出后不复位——机器正在关，界面状态已经无关紧要
     var pendingPower by remember { mutableStateOf<PowerAction?>(null) }
     val scope = rememberCoroutineScope()
+
+    NervusBackHandler(enabled = pendingPower != null || launchError != null) {
+        when {
+            pendingPower != null -> pendingPower = null
+            launchError != null -> launchError = null
+        }
+    }
 
     Scaffold(
         topBar = {

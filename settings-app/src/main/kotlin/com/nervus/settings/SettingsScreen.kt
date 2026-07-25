@@ -33,6 +33,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -42,6 +43,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.nervus.sdk.ui.NervusBackHandler
 import com.nervus.sysui.AppIdentity
 import com.nervus.sysui.rememberPolled
 import io.github.nervusos.iface.pkgmanager.v1.PackageInfo
@@ -59,9 +61,20 @@ private enum class Page(val label: String) {
 @Composable
 fun SettingsScreen(settings: Settings) {
     var page by remember { mutableStateOf(Page.Packages) }
+    val pageHistory = remember { mutableStateListOf<Page>() }
     // 解锁状态提升到这里而不是留在关于页：否则切一次页面就丢了，
     // 用户得重新点六次
     var developerUnlocked by remember { mutableStateOf(false) }
+
+    fun navigateTo(target: Page) {
+        if (target == page) return
+        pageHistory += page
+        page = target
+    }
+
+    NervusBackHandler(enabled = pageHistory.isNotEmpty()) {
+        page = pageHistory.removeAt(pageHistory.lastIndex)
+    }
 
     Row(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
         NavigationRail(containerColor = MaterialTheme.colorScheme.surfaceVariant) {
@@ -70,7 +83,7 @@ fun SettingsScreen(settings: Settings) {
             Page.entries.filter { it != Page.Developer || developerUnlocked }.forEach { p ->
                 NavigationRailItem(
                     selected = page == p,
-                    onClick = { page = p },
+                    onClick = { navigateTo(p) },
                     // 没有图标包（materialIconsExtended 单独 37MB，见 ui-common），
                     // 用首字符代替。真要图标就从 material3 自带的 Icons.Default 里取
                     icon = { RailGlyph(p.label.first().toString(), page == p) },
@@ -86,7 +99,7 @@ fun SettingsScreen(settings: Settings) {
                     developerUnlocked = developerUnlocked,
                     onUnlock = {
                         developerUnlocked = true
-                        page = Page.Developer
+                        navigateTo(Page.Developer)
                     },
                 )
                 Page.Developer -> DeveloperPage(settings)
@@ -126,6 +139,16 @@ private fun PackagesPage(settings: Settings) {
     var actionError by remember { mutableStateOf<String?>(null) }
     var confirmUninstall by remember { mutableStateOf<String?>(null) }
     val scope = rememberCoroutineScope()
+
+    NervusBackHandler(
+        enabled = confirmUninstall != null || actionError != null || selected != null,
+    ) {
+        when {
+            confirmUninstall != null -> confirmUninstall = null
+            actionError != null -> actionError = null
+            selected != null -> selected = null
+        }
+    }
 
     fun run(block: () -> Unit) {
         scope.launch {

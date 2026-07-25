@@ -33,6 +33,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.nervus.sdk.ui.NervusBackHandler
 import com.nervus.sysui.rememberPolled
 import java.nio.file.Path
 
@@ -46,6 +47,22 @@ fun FileManagerScreen(storageReady: Boolean) {
     // 每次改动后 +1，逼 rememberPolled 立刻重取。轮询兜底（别的应用也可能在
     // 写同一个共享目录），但自己的操作不该等到下一轮才可见
     var revision by remember { mutableStateOf(0) }
+
+    NervusBackHandler(
+        enabled = creatingFolder ||
+            renaming != null ||
+            pendingDelete != null ||
+            error != null ||
+            dir != UserStorage.ROOT,
+    ) {
+        when {
+            creatingFolder -> creatingFolder = false
+            renaming != null -> renaming = null
+            pendingDelete != null -> pendingDelete = null
+            error != null -> error = null
+            dir != UserStorage.ROOT -> dir = dir.parent ?: UserStorage.ROOT
+        }
+    }
 
     val entries by rememberPolled<List<UserStorage.Entry>>(
         initial = emptyList(),
