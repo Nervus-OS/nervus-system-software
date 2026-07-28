@@ -28,22 +28,14 @@ nspkg {
     // perm.system.launch：桌面点开别的应用、launcherd 唤起桌面，都要它。
     // MinTrust=Platform，因此本包必须用平台角色签名（platform-systemapp，见 signing.keyFile）
     //
-    // perm.pkg.install / perm.pkg.query：读已装应用列表要它们。
-    //
-    // 【为什么列表要 install 权限】：内核的 Resolve 是【接口级】门槛，
-    // nervus.interface.pkg.manager 整个接口挂的是 perm.pkg.install
-    // （endpoint/catalog.go），LIST 和 INSTALL 走同一道门。method 级细分要等
-    // method_registry 接线，那之前只读列表也得带上 install 权限，否则
-    // Resolve 直接 PERMISSION_DENIED —— 症状是桌面一个应用都列不出来，
-    // 而日志里只有一句 "failed to resolve optional interface"。
-    // perm.pkg.query 现在不起作用（同上），一并声明是为了 method_registry
-    // 接上那天不用再改 manifest。
+    // perm.pkg.query：解析 pkgmanager 接口并读取已安装应用列表。
+    // 安装、卸载和启停组件会在 method 路由时额外检查 perm.pkg.install；
+    // launcher 不执行这些变更操作，因此不申请安装权限。
     //
     // perm.authority.power：状态栏的重启/关机按钮。故意【不是】
     // perm.authority.reboot —— 那条是 reboot(2) 硬重启，只给 platform-release。
     permissions = listOf(
         "perm.system.launch",
-        "perm.pkg.install",
         "perm.pkg.query",
         "perm.authority.power",
     )

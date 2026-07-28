@@ -31,10 +31,9 @@ nspkg {
 
     // 设置只调 pkgmanager，自己不启动别的应用，所以不要 perm.system.launch。
     //
-    // 但 pkgmanager 这个接口本身是有门槛的：内核的 Resolve 只做【接口级】裁决，
-    // nervus.interface.pkg.manager 整个接口挂 perm.pkg.install
-    // （endpoint/catalog.go），LIST / UNINSTALL / SET_COMPONENT_ENABLED 走同一道门。
-    // 权限列表留空 = Resolve 直接 PERMISSION_DENIED，设置里一个应用都列不出来。
+    // pkgmanager 接口以 perm.pkg.query 保护 Resolve 和 LIST；UNINSTALL /
+    // SET_COMPONENT_ENABLED 在每次 method 路由时再叠加 perm.pkg.install。
+    // 设置既展示列表又执行这两类变更，因此两项都要声明。
     //
     // perm.authority.power：电源页的重启/关机。MinTrust=Platform（本包是
     // platform-systemapp 签的，够）。故意【不是】perm.authority.reboot ——
