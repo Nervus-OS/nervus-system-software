@@ -23,9 +23,10 @@ class NervusIconsTest {
             NervusIcons.ArrowBack,
             NervusIcons.Home,
             NervusIcons.ChevronRight,
+            NervusIcons.Shield,
         )
 
-        assertEquals(14, icons.size)
+        assertEquals(15, icons.size)
         assertEquals(icons.size, icons.map(ImageVector::name).distinct().size)
     }
 

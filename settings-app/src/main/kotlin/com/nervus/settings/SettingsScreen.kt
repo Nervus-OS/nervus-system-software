@@ -57,6 +57,7 @@ import kotlinx.coroutines.withContext
 
 private enum class Page(val label: String, val icon: ImageVector) {
     Packages("已装软件", NervusIcons.Apps),
+    Permissions("权限", NervusIcons.Shield),
     Power("电源", NervusIcons.Power),
     About("关于", NervusIcons.Info),
     Developer("开发者", NervusIcons.DeveloperMode),
@@ -112,6 +113,7 @@ fun SettingsScreen(settings: Settings) {
         Box(Modifier.fillMaxSize()) {
             when (page) {
                 Page.Packages -> PackagesPage(settings)
+                Page.Permissions -> PermissionsPage(settings)
                 Page.Power -> PowerPage(settings)
                 Page.About -> AboutPage(
                     developerUnlocked = developerUnlocked,

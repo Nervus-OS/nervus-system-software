@@ -5,6 +5,7 @@ import com.nervus.sdk.component.ComponentConfig
 import com.nervus.sdk.component.InterfaceRequirement
 import com.nervus.sdk.component.NervusApp
 import com.nervus.sdk.ui.attachComposeDesktop
+import com.nervus.sysui.AppIdentity
 import com.nervus.sysui.PowerAction
 import com.nervus.sysui.PowerControl
 import com.nervus.sysui.X11WindowControl
@@ -71,6 +72,42 @@ class Settings(config: ComponentConfig) : NervusApp(config) {
     }
 
     /**
+     * 打开权限管理界面（`nervus.permissionui`）。
+     *
+     * # 为什么是拉起另一个应用而不是本应用的一个页面
+     *
+     * 改 USER_CONSENT 权限的运行期授予状态需要 `perm.permission.admin`，
+     * 而那条权限要求 **platform-release** 签名角色。本应用签 platform-systemapp，
+     * 够 Platform 信任但拿不到它——这是设计意图不是配置疏忽：「能给任意应用开
+     * 摄像头和运动控制的能力」不该和一个功能繁多、迭代频繁的包共享同一条签名链
+     * （Android 把 PermissionController 做成独立 APK 是同一个理由）。
+     *
+     * 所以设置里的入口只负责【跳转】，授予本身发生在 permissionui 里。
+     *
+     * # 走 LaunchComponent 而不是 Resolve
+     *
+     * permissionui 目前不导出任何接口——它要导出的话，manifest 里的 exports
+     * 会要求包内附带 ProviderArtifacts（`provider.binpb` + `schemas.binpb`），
+     * 而打包插件还不产出那两个文件（见 catalog/builder.go 里
+     * "exports interfaces without ProviderArtifacts" 那条硬拒）。
+     *
+     * 会阻塞（内核要等目标进程起来），必须在后台线程调用。
+     */
+    fun openPermissionManager() {
+        log.info("launching $PERMISSION_UI_PACKAGE/$PERMISSION_UI_COMPONENT")
+        val alreadyRunning = launchComponent(PERMISSION_UI_PACKAGE, PERMISSION_UI_COMPONENT)
+        if (alreadyRunning) {
+            // 已经在跑：它的窗口可能被压在后面（Nervus 是单前台窗口环境），
+            // 把它激活。激活失败要报出来——否则用户点了按钮什么也没发生
+            if (!X11WindowControl.activateWindow(AppIdentity.displayName(PERMISSION_UI_PACKAGE))) {
+                throw IllegalStateException(
+                    "$PERMISSION_UI_PACKAGE is running but its window cannot be activated"
+                )
+            }
+        }
+    }
+
+    /**
      * 停用/启用一个组件。
      *
      * 保护名单里的组件（设置自己、权限确认、pkgmanagerd…）会被内核以
@@ -125,6 +162,23 @@ object PkgManager {
     const val LIST = 3
     const val SET_COMPONENT_ENABLED = 4
 }
+
+/**
+ * 权限管理界面的身份。
+ *
+ * 【设置自己不承载权限管理】。改 USER_CONSENT 权限的授予状态需要
+ * `perm.permission.admin`，那条权限要求 platform-release 签名角色，而本包签
+ * platform-systemapp——够 Platform 信任，但拿不到它。
+ *
+ * 这不是配置疏忽：「能给任意应用开摄像头和运动控制的能力」不该和一个功能繁多、
+ * 迭代频繁的包共享同一条签名链。Android 把 PermissionController 做成独立 APK
+ * 是同一个理由。所以这里只负责跳转过去。
+ *
+ * 组件 ID 是 `main`，与 permissionui 的 `components.app("main")` 一致——
+ * 内核按 (package_id, component_id) 认身份。
+ */
+private const val PERMISSION_UI_PACKAGE = "nervus.permissionui"
+private const val PERMISSION_UI_COMPONENT = "main"
 
 
 fun main() {

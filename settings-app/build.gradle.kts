@@ -38,7 +38,22 @@ nspkg {
     // perm.authority.power：电源页的重启/关机。MinTrust=Platform（本包是
     // platform-systemapp 签的，够）。故意【不是】perm.authority.reboot ——
     // 那条是 reboot(2) 硬重启，只给 platform-release，属于故障恢复路径。
-    permissions = listOf("perm.pkg.install", "perm.pkg.query", "perm.authority.power")
+    // perm.system.launch：把「权限管理」入口指向 nervus.permissionui。
+    //
+    // 【为什么设置自己不承载权限管理】：改 USER_CONSENT 授予状态需要
+    // perm.permission.admin，那条权限要求 platform-release 签名，而本模块签
+    // platform-systemapp，够不着。这是设计意图不是疏漏——见 permissionui 的
+    // build.gradle.kts。所以设置只负责跳转过去。
+    //
+    // 【这条权限确实不限制目标】：内核 handleLaunchComponent 只查权限，持有它
+    // 就能拉起任意组件。代价可接受的理由是本模块已持有 perm.pkg.install
+    //  （能卸载包、停用组件），破坏力大于「拉起一个组件」。
+    permissions = listOf(
+        "perm.pkg.install",
+        "perm.pkg.query",
+        "perm.authority.power",
+        "perm.system.launch",
+    )
 
     // 组件 ID 必须是 main：保护名单里写的是 "nervus.settings/main"
     components.app("main") {

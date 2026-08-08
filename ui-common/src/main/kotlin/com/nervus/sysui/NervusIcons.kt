@@ -192,6 +192,16 @@ object NervusIcons {
             autoMirror = true,
         )
     }
+
+    /** 权限。盾牌而不是锁：锁的语义是"锁住/解锁"，而权限页是"谁被允许做什么"。 */
+    val Shield by lazy {
+        symbol(
+            "Shield",
+            "M480-80q-139-35-229.5-152T160-622v-184l320-120 320 120v184q0 " +
+                "213-90.5 390T480-80Zm0-84q104-33 172-132t68-226v-136l-240-90-240 " +
+                "90v136q0 127 68 226t172 132Zm0-316Z",
+        )
+    }
 }
 
 fun iconForPackage(packageId: String): ImageVector = when (packageId) {
