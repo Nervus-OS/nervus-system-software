@@ -668,6 +668,15 @@ Android NDK 名（`arm64-v8a`）和裸 CPU 名（`aarch64`）一律拒绝。
 `signing/platform-systemapp.pem`，由 `deploy/build-release.sh` 从
 `deploy/keys/` 拷进来。本地手工构建时自己拷一份。
 
+**唯一的例外是 `permissionui`**，它签 `platform-release`（`signing.role` +
+`signing.keyFile` 都要改，两个 key 构建脚本都会拷进 `signing/`）。理由是它要
+`perm.permission.admin`，而那条权限的定义里钉了 `platform-release` 签名角色，
+systemapp 拿不到——见 nervud `internal/catalog/bootstrap.go`。
+
+这不是「谁更重要」，是把「能给任意应用开摄像头和运动控制的能力」与一个功能
+繁多、迭代频繁的包分开。**新模块默认仍用 systemapp**；要用 release 得先说清楚
+为什么非它不可。
+
 key_id 是**裸 32 字节公钥**的 sha256：
 
 ```
@@ -858,6 +867,7 @@ trust 的序是 `Ordinary < OEM < Platform`，判据是 `trust < entry.MinTrust`
 - [ ] `build.gradle.kts` 里读了 `rootProject.extra["nervusAbi"]`，没用 `currentOs`
 - [ ] 依赖只写 `implementation(project(":ui-common"))`
 - [ ] `signing.keyFile` 指向 `signing/platform-systemapp.pem`
+      （唯一例外是 `permissionui`，见 §9.3）
 
 **manifest**
 

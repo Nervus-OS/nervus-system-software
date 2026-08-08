@@ -21,3 +21,8 @@ include(":ui-common")
 include(":launcher")
 include(":settings-app")
 include(":filemanager")
+
+// 唯一签 platform-release 的模块（其余三个签 platform-systemapp）。
+// 它需要 perm.permission.admin，而那条权限要求 platform-release 签名角色。
+// 见 permissionui/build.gradle.kts 里 permissions 的说明
+include(":permissionui")
