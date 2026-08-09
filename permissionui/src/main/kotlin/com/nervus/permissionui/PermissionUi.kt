@@ -274,6 +274,8 @@ class PermissionUi(config: ComponentConfig) : NervusApp(config) {
      */
     fun onOpenManager(packageId: String) {
         log.info("openManager packageId='${packageId.ifEmpty { "(all)" }}'")
+        // 用户主动要看这个界面（从设置跳进来），申请结束后不能把它收走
+        windowWanted = true
         _managerFilter.value = packageId
         // 激活失败只记日志不抛：筛选状态已经改好了，用户手动切到本窗口仍能
         // 看到正确的内容。为一次窗口激活失败让整个调用失败是不成比例的
@@ -301,6 +303,35 @@ class PermissionUi(config: ComponentConfig) : NervusApp(config) {
      */
     private val _pendingRequest = MutableStateFlow<PendingRequest?>(null)
     val pendingRequest: StateFlow<PendingRequest?> get() = _pendingRequest
+
+    /**
+     * 用户是不是**主动**要看这个界面。
+     *
+     * 决定一次权限申请结束后要不要把窗口收走。本应用是 on-demand 的：一次纯粹的
+     * 权限申请会把它拉起来，而它的窗口是全屏的（[attachComposeDesktop] 用
+     * `Maximized`）。申请答完还留在前台，用户得自己按 Esc 退出去——而他压根没打算
+     * 打开权限管理，只是在别的应用里点了个按钮。
+     *
+     * 反过来，用户**确实**在用这个界面的时候把它收走更糟：那是把他正看着的东西
+     * 抽走。所以只收「为了这次申请才浮上来的」窗口。
+     *
+     * 置 true 的两种情形：从设置跳进来（`OpenManager`），或用户在管理界面动过
+     * 任何一个开关。两者都说明他在用这个界面。
+     *
+     * @Volatile：写它的是 dispatch 线程与 UI 线程，读它的是权限申请的工作线程。
+     */
+    @Volatile
+    private var windowWanted = false
+
+    /**
+     * 用户在管理界面动了开关——从此这个窗口是他要的。
+     *
+     * 由界面在改授予状态时调用。**不能只在 [onOpenManager] 里置位**：用户也可能
+     * 从桌面直接打开本应用，那条路上没有任何 IPC 调用经过我们。
+     */
+    fun markWindowWanted() {
+        windowWanted = true
+    }
 
     /**
      * 串行化用的闸门。**一次只问一个申请**。
@@ -511,6 +542,16 @@ class PermissionUi(config: ComponentConfig) : NervusApp(config) {
         val result = RequestPermissionResult.newBuilder()
             .addAllOutcomes(outcomes.sortedBy { it.permissionId })
             .build()
+
+        // 【必须在 completeOperation 之前收窗口】。completeOperation 是唤醒申请方
+        // 的那一下：它从 callOperation 醒过来，很可能立刻把自己的窗口拉到前台。
+        // 之后再调 hideActiveWindow 就是在跟它抢同一个「活跃窗口」——而那个函数
+        // 最小化的是【当时正活跃的那个】，抢输了我们就把申请方的窗口最小化了。
+        //
+        // 放在这里，申请方还阻塞在 callOperation 上，不可能来抢焦点，
+        // 因此 hideActiveWindow 此刻一定作用在我们自己身上。
+        hideWindowIfUnwanted()
+
         // 【用户拒绝也走 completeOperation 而不是 failOperation】：那是一次正常
         // 完成的确认，答案是「不」。回失败码会让调用方分不清「用户说不」与
         // 「确认屏自己崩了」，而这两者在界面上该有完全不同的反应
@@ -518,6 +559,22 @@ class PermissionUi(config: ComponentConfig) : NervusApp(config) {
         // acceptOperation 必须先调：状态机不允许 PENDING 直接到 SUCCEEDED
         acceptOperation(operationId)
         completeOperation(operationId, result.toByteArray())
+    }
+
+    /**
+     * 申请答完之后把窗口收走——**仅当**它是为这次申请才浮上来的。
+     *
+     * 隐藏而不是退出进程：本组件是 on-demand 的，空闲超时由内核回收
+     * （manifest 的 `idle_timeout_sec`）。自己 exit 会让下一次申请重新付一次
+     * Compose 冷启动，而用户在那一两秒里看不到任何反应。
+     *
+     * 失败只记日志：申请的结果已经落库了，一次窗口操作失败不该影响它。
+     */
+    private fun hideWindowIfUnwanted() {
+        if (windowWanted) return
+        if (!X11WindowControl.hideActiveWindow()) {
+            log.warning("requestPermission: cannot hide window after request")
+        }
     }
 
     /** 界面把用户的选择交回工作线程。accepted 是用户勾上的那些权限 ID。 */

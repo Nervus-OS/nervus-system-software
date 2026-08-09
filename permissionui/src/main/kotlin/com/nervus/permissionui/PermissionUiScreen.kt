@@ -248,6 +248,10 @@ private fun PermissionRow(app: PermissionUi, packageId: String, grant: Permissio
             Switch(
                 checked = checked,
                 onCheckedChange = { want ->
+                    // 用户在动这个界面 —— 一次并发的权限申请结束后不能把它收走。
+                    // 必须在这里也置位，不能只靠 OpenManager：从桌面直接打开本
+                    // 应用的那条路上没有任何 IPC 调用经过我们
+                    app.markWindowWanted()
                     pending[grant.permissionId] = want
                     failure = null
                     scope.launch {
