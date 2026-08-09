@@ -22,7 +22,9 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
@@ -58,6 +60,21 @@ fun PermissionUiScreen(app: PermissionUi) {
         app.listGrants()
     }
 
+    // OpenManager 带来的「只看这一个包」。空串 = 总览。
+    //
+    // 写它的是 IPC dispatch 线程，读它的是这里（UI 线程），所以中间隔着一个
+    // StateFlow 而不是 Compose 状态——见 PermissionUi.managerFilter 的说明
+    val filter by app.managerFilter.collectAsState()
+
+    // 筛选在【显示层】做而不是让内核只返回一个包：ListGrants 没有按包过滤的
+    // 参数，而且总览与单包看的是同一份数据。多发一次调用只会让两个视图有机会
+    // 显示不一致的状态
+    val shown = if (filter.isEmpty()) {
+        packages.value
+    } else {
+        packages.value.filter { it.packageId == filter }
+    }
+
     Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
         Scaffold { inner ->
             val box = Modifier.fillMaxSize().padding(inner)
@@ -78,12 +95,31 @@ fun PermissionUiScreen(app: PermissionUi) {
                         "应用申请摄像头、用户文件或运动控制后会出现在这里",
                     )
 
+                // 筛选之后为空是【另一件事】：数据读到了，只是那个包没有可授予
+                // 权限（或压根没装）。说成「没有应用申请敏感权限」会让从设置跳
+                // 过来的用户以为全系统都没有权限要管
+                shown.isEmpty() ->
+                    Message(
+                        box,
+                        "这个应用没有可管理的权限",
+                        filter,
+                    )
+
                 else -> LazyColumn(
                     modifier = box,
                     contentPadding = PaddingValues(20.dp),
                     verticalArrangement = Arrangement.spacedBy(16.dp),
                 ) {
-                    items(packages.value, key = { it.packageId }) { pkg ->
+                    // 从设置跳进来时给一条回到总览的出口。没有它，用户被锁在
+                    // 单包视图里，而这个界面没有别的导航
+                    if (filter.isNotEmpty()) {
+                        item {
+                            TextButton(onClick = { app.clearManagerFilter() }) {
+                                Text("← 查看全部应用的权限")
+                            }
+                        }
+                    }
+                    items(shown, key = { it.packageId }) { pkg ->
                         PackageCard(app, pkg)
                     }
                 }

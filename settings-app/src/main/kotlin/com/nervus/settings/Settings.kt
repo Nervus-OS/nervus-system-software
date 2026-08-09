@@ -5,7 +5,6 @@ import com.nervus.sdk.component.ComponentConfig
 import com.nervus.sdk.component.InterfaceRequirement
 import com.nervus.sdk.component.NervusApp
 import com.nervus.sdk.ui.attachComposeDesktop
-import com.nervus.sysui.AppIdentity
 import com.nervus.sysui.PowerAction
 import com.nervus.sysui.PowerControl
 import com.nervus.sysui.X11WindowControl
@@ -14,6 +13,7 @@ import io.github.nervusos.iface.pkgmanager.v1.ListResult
 import io.github.nervusos.iface.pkgmanager.v1.PackageInfo
 import io.github.nervusos.iface.pkgmanager.v1.SetComponentEnabledRequest
 import io.github.nervusos.iface.pkgmanager.v1.UninstallRequest
+import io.github.nervusos.iface.permission.v1.OpenManagerRequest
 import java.util.logging.Logger
 import kotlin.system.exitProcess
 
@@ -42,6 +42,19 @@ class Settings(config: ComponentConfig) : NervusApp(config) {
             // 也非必需：这是内建接口，nervud 活着它就在，理论上不会解析失败。
             // 但「电源按钮解析不到」不该让整个设置打不开——用户还有别的事要做
             isRequired = false,
+        ),
+        InterfaceRequirement(
+            id = PermissionUiInterface.INTERFACE_ID,
+            // 非必需：permissionui 是 on-demand 的界面组件，设置能不能打开与它
+            // 在不在跑无关
+            isRequired = false,
+            // 【必须 false】。permissionui 的 launch_mode 是 on-demand，而
+            // Resolve 就是拉起它的动作——在启动时解析等于设置一开机就把权限
+            // 管理界面的进程拉起来，用户会看到一个自己没点过的窗口浮出来。
+            //
+            // 推迟到 openPermissionManager() 里首次调用时才解析：那时用户正是
+            // 点了「打开权限管理」，把它拉起来才是他要的
+            resolveEagerly = false,
         ),
     )
 
@@ -84,27 +97,35 @@ class Settings(config: ComponentConfig) : NervusApp(config) {
      *
      * 所以设置里的入口只负责【跳转】，授予本身发生在 permissionui 里。
      *
-     * # 走 LaunchComponent 而不是 Resolve
+     * # 为什么是一次接口调用而不是 LaunchComponent
      *
-     * permissionui 目前不导出任何接口——它要导出的话，manifest 里的 exports
-     * 会要求包内附带 ProviderArtifacts（`provider.binpb` + `schemas.binpb`），
-     * 而打包插件还不产出那两个文件（见 catalog/builder.go 里
-     * "exports interfaces without ProviderArtifacts" 那条硬拒）。
+     * 早先这里走 `LaunchComponent`（envelope 80），因为 permissionui 还不导出
+     * 任何接口。那条路能把它叫起来，但**传不了任何参数**——用户在设置里点某个
+     * 应用的「管理权限」，跳过去看到的是全部应用的总览，还得自己再找一遍。
+     *
+     * 现在 permissionui 导出 `permission.ui`，于是这里改成一次普通调用并带上
+     * `package_id`，界面直接收窄到那个包。附带的好处是不再需要
+     * `perm.system.launch`——那条权限不限制目标组件，持有它就能拉起任意组件，
+     * 而本应用只想打开权限界面这一个。能力收窄到刚好够用。
+     *
+     * 组件由内核在 Resolve 时按 `launch_mode = on-demand` 自动拉起，本应用
+     * 不需要知道它有没有在跑；窗口激活也由 permissionui 自己做（它知道自己的
+     * 窗口标题）。
+     *
+     * @param packageId 只看这一个包的权限；空串（缺省）= 打开总览。
      *
      * 会阻塞（内核要等目标进程起来），必须在后台线程调用。
      */
-    fun openPermissionManager() {
-        log.info("launching $PERMISSION_UI_PACKAGE/$PERMISSION_UI_COMPONENT")
-        val alreadyRunning = launchComponent(PERMISSION_UI_PACKAGE, PERMISSION_UI_COMPONENT)
-        if (alreadyRunning) {
-            // 已经在跑：它的窗口可能被压在后面（Nervus 是单前台窗口环境），
-            // 把它激活。激活失败要报出来——否则用户点了按钮什么也没发生
-            if (!X11WindowControl.activateWindow(AppIdentity.displayName(PERMISSION_UI_PACKAGE))) {
-                throw IllegalStateException(
-                    "$PERMISSION_UI_PACKAGE is running but its window cannot be activated"
-                )
-            }
-        }
+    fun openPermissionManager(packageId: String = "") {
+        log.info("openManager packageId='${packageId.ifEmpty { "(all)" }}'")
+        call(
+            interfaceId = PermissionUiInterface.INTERFACE_ID,
+            methodId = PermissionUiInterface.OPEN_MANAGER,
+            payload = OpenManagerRequest.newBuilder()
+                .setPackageId(packageId)
+                .build()
+                .toByteArray(),
+        )
     }
 
     /**
@@ -164,21 +185,15 @@ object PkgManager {
 }
 
 /**
- * 权限管理界面的身份。
+ * `nervus.interface.permission.ui` 的方法 ID。
  *
- * 【设置自己不承载权限管理】。改 USER_CONSENT 权限的授予状态需要
- * `perm.permission.admin`，那条权限要求 platform-release 签名角色，而本包签
- * platform-systemapp——够 Platform 信任，但拿不到它。
- *
- * 这不是配置疏忽：「能给任意应用开摄像头和运动控制的能力」不该和一个功能繁多、
- * 迭代频繁的包共享同一条签名链。Android 把 PermissionController 做成独立 APK
- * 是同一个理由。所以这里只负责跳转过去。
- *
- * 组件 ID 是 `main`，与 permissionui 的 `components.app("main")` 一致——
- * 内核按 (package_id, component_id) 认身份。
+ * 取值以 proto 的 `PermissionUiMethod` 枚举为准。本应用只用 `OPEN_MANAGER`
+ * ——`CONFIRM_INSTALL` 需要 `perm.pkg.install`，而且那是安装程序的事。
  */
-private const val PERMISSION_UI_PACKAGE = "nervus.permissionui"
-private const val PERMISSION_UI_COMPONENT = "main"
+object PermissionUiInterface {
+    const val INTERFACE_ID = "nervus.interface.permission.ui"
+    const val OPEN_MANAGER = 2
+}
 
 
 fun main() {

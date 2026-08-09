@@ -127,8 +127,8 @@ fun PermissionsPage(settings: Settings) {
             Text(if (launching) "正在打开…" else "打开权限管理")
         }
 
-        // 失败要显示出来。拉起一个组件可能因为它被停用、或者本应用没有
-        // perm.system.launch 而失败——静默的话用户只会看到「点了没反应」
+        // 失败要显示出来。解析 permission.ui 可能因为 permissionui 被停用、
+        // 或者内核拉起它失败而失败——静默的话用户只会看到「点了没反应」
         error?.let {
             Text(
                 "打不开权限管理：$it",
