@@ -40,17 +40,44 @@ nspkg {
     // 手里，就等于把「谁能给任意应用开摄像头和运动控制」和一个功能繁多、
     // 迭代频繁的包绑在一起。Android 把 PermissionController 做成独立 APK
     // 是同一个理由。设置应用应当跳转到这里，而不是自己承载。
+    //
+    // 【只有这一条】。本包刻意【不持有】任何装包权限。
+    //
+    // 安装期的权限展示与确认归 nervus.packageinstaller，那是另一个包。理由与
+    // 上面那段是同一条：「能授予权限」和「能装任意软件」是两个高权限能力，
+    // 合在一个进程里就等于造出一个能同时做这两件事的目标。Android 把
+    // PermissionController 与 PackageInstaller 做成两个独立 APK 正是如此。
     permissions = listOf("perm.permission.admin")
+
+    // Provider 契约产物（provider.binpb + schemas.binpb）。
+    //
+    // 导出接口的包【必须】带它：内核 loadRequiredProviderArtifacts 对「有
+    // exports 却没有 provider」直接返回 ErrProviderArtifactsRequired，症状是
+    // 本包在开机扫描时被隔离，而它自己什么日志都没有。
+    //
+    // 产物不在这里生成——两份字节必须是 Go 的 Deterministic protobuf 编码，
+    // protobuf-java 不保证逐字节相同。它们由 nervus-ipc 的 registry/providerkit
+    // 生成并提交，随 nervus-app-sdk 的 jar 发布，这里只负责取出来放进包。
+    provider { fromClasspath("nervus.permissionui") }
 
     components.app("main") {
         mainClass = "com.nervus.permissionui.PermissionUiKt"
         runtime = "jvm"
-        // manual：只由桌面或设置显式拉起。
+        // on-demand：设置（或别的应用）Resolve 本接口时由内核拉起。
         //
-        // 【等 ConfirmInstall 接口落地后改成 on-demand】——那时安装方需要
-        // Resolve 到本组件来请求一次确认，而 Resolve 只拉得起 on-demand 的组件。
-        // 现在它还不导出任何接口，声明 on-demand 是在说一件不存在的事
-        launchMode = "manual"
+        // 【必须是 on-demand 而不是 manual】：Resolve 只拉得起 on-demand 的
+        // 组件。留 manual 的话，设置 Resolve permission.ui 会在「组件没在跑」
+        // 这一步失败——而那正是「从设置跳到某个包的权限页」需要的路径。
+        launchMode = "on-demand"
+        // 导出权限管理界面接口（OpenManager）。
+        //
+        // visibility = public：调用方是设置一类的别的包，不可能与本包同属一个
+        // package。private 只在同包组件之间可见，写成那样等于谁都 Resolve 不到。
+        //
+        // 这一条必须与 provider.binpb 里声明的接口【完全对应】：catalog 的
+        // addArtifacts 是双向闭合的——descriptor 里有而 exports 里没有，或
+        // 反之，两种都会让整个 Catalog 构建失败（不只是本包被隔离）。
+        exports.register("nervus.interface.permission.ui") { visibility = "public" }
         // 内核目前不读这个字段（Resolve 只看 perm.Allowed），写全是为了 manifest
         // 如实反映组件会调什么
         interfaces = listOf("nervus.interface.permission.admin")
