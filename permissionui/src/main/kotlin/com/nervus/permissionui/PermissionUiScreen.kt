@@ -66,6 +66,12 @@ fun PermissionUiScreen(app: PermissionUi) {
     // StateFlow 而不是 Compose 状态——见 PermissionUi.managerFilter 的说明
     val filter by app.managerFilter.collectAsState()
 
+    // 正在等用户回答的权限申请。同样隔着 StateFlow——写它的是工作线程。
+    //
+    // 弹窗【叠在管理界面之上】而不是另开一个窗口：Nervus 是单前台窗口环境，
+    // 第二个窗口未必浮得上来，而一个浮不上来的授权弹窗会让申请静默超时。
+    val pending by app.pendingRequest.collectAsState()
+
     // 筛选在【显示层】做而不是让内核只返回一个包：ListGrants 没有按包过滤的
     // 参数，而且总览与单包看的是同一份数据。多发一次调用只会让两个视图有机会
     // 显示不一致的状态
@@ -126,6 +132,13 @@ fun PermissionUiScreen(app: PermissionUi) {
             }
         }
     }
+
+    // 申请弹窗叠在管理界面之上。放在 Surface 之外、composable 末尾：AlertDialog
+    // 自己是一层 overlay，嵌在 Scaffold 的内容里会被那份 padding 和滚动状态影响。
+    //
+    // 它不受 filter 影响 —— 一次权限申请必须无条件问到用户，不能因为界面此刻
+    // 正收窄在某个别的包上就不显示
+    pending?.let { PermissionRequestDialog(app, it) }
 }
 
 /** 整页居中的一句话 + 可选副文案。加载中/读不出/空态共用。 */
