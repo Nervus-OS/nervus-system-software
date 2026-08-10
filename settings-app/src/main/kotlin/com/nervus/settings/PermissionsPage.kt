@@ -26,9 +26,13 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.nervus.sysui.NervusIcons
+import java.util.logging.Logger
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+
+/** 本页的日志器。失败必须进 journal，不能只显示在屏幕上——见按钮那处的说明。 */
+private val pageLog = Logger.getLogger("com.nervus.settings.PermissionsPage")
 
 /**
  * 权限页：跳转到权限管理界面。
@@ -110,7 +114,22 @@ fun PermissionsPage(settings: Settings) {
                     // 内核要等目标进程起来并报到，会阻塞若干秒，必须离开 UI 线程
                     withContext(Dispatchers.IO) {
                         runCatching { settings.openPermissionManager() }
-                            .onFailure { error = it.message ?: it::class.simpleName }
+                            .onFailure {
+                                // 【也要落日志, 不能只显示在界面上】.
+                                //
+                                // 曾经只写 error 变量, 于是那句报错只存在于屏幕上:
+                                // journal 里在 "resolved -> endpoint N" 之后【什么
+                                // 都没有】. 排查时看到的是一份不含真正错误的日志,
+                                // 只能靠猜, 而每猜一次要付一轮编译-刷机-复现.
+                                //
+                                // 带上堆栈: message 只说"失败了", 而这条链路穿过
+                                // SDK 的 call/re-resolve, 到底在哪一层抛的要看栈.
+                                pageLog.log(
+                                    java.util.logging.Level.SEVERE,
+                                    "openPermissionManager failed", it,
+                                )
+                                error = it.message ?: it::class.simpleName
+                            }
                     }
                     launching = false
                 }
