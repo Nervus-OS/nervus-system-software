@@ -4,8 +4,8 @@ import androidx.compose.ui.unit.dp
 import com.nervus.sdk.component.ComponentConfig
 import com.nervus.sdk.component.InterfaceRequirement
 import com.nervus.sdk.component.NervusApp
+import com.nervus.sdk.ui.NervusWindow
 import com.nervus.sdk.ui.attachComposeDesktop
-import com.nervus.sysui.X11WindowControl
 import java.util.logging.Logger
 import kotlin.system.exitProcess
 
@@ -52,11 +52,26 @@ fun main() {
         log.warning("user-data 不可写：${UserStorage.ROOT}")
     }
 
+    // 窗口句柄：让返回键隐藏窗口而不是杀掉进程（见下面 onUnhandledBack）。
+    val windowHandle = NervusWindow()
+
     fm.attachComposeDesktop(
         title = "文件",
         width = 1000.dp,
         height = 700.dp,
-        onUnhandledBack = X11WindowControl::hideActiveWindow,
+        // 返回键隐藏窗口而不是结束进程。
+        //
+        // 【不能用 X11WindowControl.hideActiveWindow】：那是 xdotool 的最小化，
+        // 在这个环境里会让 Compose 触发 onCloseRequest —— 于是按一下返回键整个
+        // 进程就退了。用户下次打开要重付一次 JVM + Compose 冷启动，而他以为
+        // 自己只是返回上一层。
+        //
+        // 返回 true 表示这次返回本应用处理了，不再往上冒泡。
+        onUnhandledBack = {
+            windowHandle.hide()
+            true
+        },
+        windowHandle = windowHandle,
         onDisconnect = {
             log.severe("filemanager: control plane lost, exiting")
             exitProcess(1)

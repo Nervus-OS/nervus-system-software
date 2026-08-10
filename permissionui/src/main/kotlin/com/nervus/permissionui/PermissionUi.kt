@@ -9,6 +9,7 @@ import com.nervus.sdk.component.ProvidedInterface
 import com.nervus.sdk.operation.OperationPending
 import com.nervus.sdk.operation.currentCaller
 import com.nervus.sdk.operation.currentOperationId
+import com.nervus.sdk.ui.NervusWindow
 import com.nervus.sdk.ui.attachComposeDesktop
 import com.nervus.sysui.X11WindowControl
 import io.github.nervusos.iface.permission.v1.GrantList
@@ -277,6 +278,10 @@ class PermissionUi(config: ComponentConfig) : NervusApp(config) {
         // 用户主动要看这个界面（从设置跳进来），申请结束后不能把它收走
         windowWanted = true
         _managerFilter.value = packageId
+        // 【必须 show】：窗口可能正被隐藏着（上一次权限申请答完之后自己退下去了）。
+        // 那种情况下进程活着、endpoint 有效，所以内核【不会】重新拉起本组件，
+        // 也就不会有新窗口自动出现——不 show 的话调用方看起来什么都没发生。
+        window.show()
         // 激活失败只记日志不抛：筛选状态已经改好了，用户手动切到本窗口仍能
         // 看到正确的内容。为一次窗口激活失败让整个调用失败是不成比例的
         if (!X11WindowControl.activateWindow(WINDOW_TITLE)) {
@@ -322,6 +327,15 @@ class PermissionUi(config: ComponentConfig) : NervusApp(config) {
      */
     @Volatile
     private var windowWanted = false
+
+    /**
+     * 本应用的窗口句柄。
+     *
+     * 由 [main] 传给 `attachComposeDesktop` 接到真实窗口上。用它区分「隐藏自己」
+     * 与「关掉自己」——**隐藏绝不能结束进程**，否则本组件注册的 endpoint 随之
+     * 失效，而调用方还缓存着它。
+     */
+    val window = NervusWindow()
 
     /**
      * 用户在管理界面动了开关——从此这个窗口是他要的。
@@ -490,6 +504,13 @@ class PermissionUi(config: ComponentConfig) : NervusApp(config) {
             items = toAsk.toList(),
             answer = answer,
         )
+        // 先让窗口可见，再拉到前台。
+        //
+        // 两步都要：window.show() 管的是 Compose 侧的 visible（上一次申请答完后
+        // 它被隐藏了），activateWindow 管的是窗口管理器侧的焦点。少了前者，
+        // 一个隐藏着的窗口无从被 wmctrl 激活；少了后者，窗口可见但压在别人下面。
+        window.show()
+
         // 把窗口拉到前台。失败要当成「没能问到用户」而全部按拒绝处理 ——
         // 【绝不能静默放行】：显示不出确认框时把权限授出去，等于无声地替用户
         // 点了同意
@@ -572,9 +593,17 @@ class PermissionUi(config: ComponentConfig) : NervusApp(config) {
      */
     private fun hideWindowIfUnwanted() {
         if (windowWanted) return
-        if (!X11WindowControl.hideActiveWindow()) {
-            log.warning("requestPermission: cannot hide window after request")
-        }
+        // 【用 window.hide() 而不是 X11 最小化】。
+        //
+        // 曾经这里调 X11WindowControl.hideActiveWindow()（xdotool windowminimize），
+        // 而在这个环境里最小化会让 Compose 触发 onCloseRequest —— 于是「隐藏自己」
+        // 实际上【杀掉了本进程】。症状离原因很远：进程没了，设置侧缓存的 endpoint
+        // 变成死号（NOT_FOUND），而它一旦被重新 Resolve 拉起又弹一个新的全屏窗口,
+        // 用户看到的是「权限窗口关不掉」。
+        //
+        // window.hide() 走 Compose 自己的 visible，不经过窗口管理器，进程留着，
+        // 已注册的 endpoint 继续有效。
+        window.hide()
     }
 
     /** 界面把用户的选择交回工作线程。accepted 是用户勾上的那些权限 ID。 */
@@ -639,7 +668,18 @@ fun main() {
         title = WINDOW_TITLE,
         width = 1100.dp,
         height = 760.dp,
-        onUnhandledBack = X11WindowControl::hideActiveWindow,
+        // 返回键隐藏窗口而不是结束进程。
+        //
+        // 【不能用 X11WindowControl.hideActiveWindow】：那是 xdotool 的最小化，
+        // 在这个环境里会让 Compose 触发 onCloseRequest，于是按一下返回键整个进程
+        // 就退了——本组件注册的 endpoint 随之失效，而设置那边还缓存着它。
+        //
+        // 返回 true 表示「这一次返回本应用自己处理了」，不要再往上冒泡。
+        onUnhandledBack = {
+            app.window.hide()
+            true
+        },
+        windowHandle = app.window,
         onDisconnect = {
             log.severe("permissionui: control plane lost, exiting")
             exitProcess(1)

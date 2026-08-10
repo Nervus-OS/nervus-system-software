@@ -4,16 +4,12 @@ import androidx.compose.ui.unit.dp
 import com.nervus.sdk.component.ComponentConfig
 import com.nervus.sdk.component.InterfaceRequirement
 import com.nervus.sdk.component.NervusApp
+import com.nervus.sdk.ui.NervusWindow
 import com.nervus.sdk.ui.attachComposeDesktop
 import com.nervus.sysui.PowerAction
 import com.nervus.sysui.PowerControl
-import com.nervus.sysui.X11WindowControl
-import io.github.nervusos.iface.pkgmanager.v1.ListRequest
-import io.github.nervusos.iface.pkgmanager.v1.ListResult
-import io.github.nervusos.iface.pkgmanager.v1.PackageInfo
-import io.github.nervusos.iface.pkgmanager.v1.SetComponentEnabledRequest
-import io.github.nervusos.iface.pkgmanager.v1.UninstallRequest
 import io.github.nervusos.iface.permission.v1.OpenManagerRequest
+import io.github.nervusos.iface.pkgmanager.v1.*
 import java.util.logging.Logger
 import kotlin.system.exitProcess
 
@@ -209,11 +205,26 @@ fun main() {
 
     Runtime.getRuntime().addShutdownHook(Thread { settings.close() })
 
+    // 窗口句柄：让返回键隐藏窗口而不是杀掉进程（见下面 onUnhandledBack）。
+    val windowHandle = NervusWindow()
+
     settings.attachComposeDesktop(
         title = "设置",
         width = 1100.dp,
         height = 760.dp,
-        onUnhandledBack = X11WindowControl::hideActiveWindow,
+        // 返回键隐藏窗口而不是结束进程。
+        //
+        // 【不能用 X11WindowControl.hideActiveWindow】：那是 xdotool 的最小化，
+        // 在这个环境里会让 Compose 触发 onCloseRequest —— 于是按一下返回键整个
+        // 进程就退了。用户下次打开要重付一次 JVM + Compose 冷启动，而他以为
+        // 自己只是返回上一层。
+        //
+        // 返回 true 表示这次返回本应用处理了，不再往上冒泡。
+        onUnhandledBack = {
+            windowHandle.hide()
+            true
+        },
+        windowHandle = windowHandle,
         onDisconnect = {
             log.severe("settings: control plane lost, exiting")
             exitProcess(1)
