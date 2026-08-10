@@ -47,7 +47,18 @@ nspkg {
     // 上面那段是同一条：「能授予权限」和「能装任意软件」是两个高权限能力，
     // 合在一个进程里就等于造出一个能同时做这两件事的目标。Android 把
     // PermissionController 与 PackageInstaller 做成两个独立 APK 正是如此。
-    permissions = listOf("perm.permission.admin")
+    // perm.service.register 是【导出接口的门槛】，与上面那条无关：
+    // 内核在 RegisterEndpoint 时按 Export 的 visibility 选权限 ID 并裁决
+    // （public → perm.service.register，package → .private，见
+    // endpoint/register.go 的步骤 3）。本包导出 permission.ui 且 visibility
+    // 是 public，因此必须持有它。
+    //
+    // 漏掉它的症状很难自己想到：进程正常起来、连上控制面、然后 RegisterEndpoint
+    // 被拒（missing permission perm.service.register）→ SDK 抛异常 → 进程退出
+    // → 内核重启它 → 再拒，直到熔断。而调用方那侧看到的是
+    // RESOLVE_ENDPOINT_REASON_INTERFACE_NOT_FOUND——「没有服务注册这个接口」，
+    // 一个完全不指向权限的错误。
+    permissions = listOf("perm.permission.admin", "perm.service.register")
 
     // Provider 契约产物（provider.binpb + schemas.binpb）。
     //
