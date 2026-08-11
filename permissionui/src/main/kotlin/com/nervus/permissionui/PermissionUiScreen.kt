@@ -216,7 +216,21 @@ private fun PermissionRow(app: PermissionUi, packageId: String, grant: Permissio
     val pending = remember { mutableStateMapOf<String, Boolean>() }
     var failure by remember { mutableStateOf<String?>(null) }
 
-    val authoritative = grant.state == GrantState.GRANT_STATE_GRANTED
+    // 【开关显示状态取 effectiveGranted 而不是 state】。
+    //
+    // 两者对系统软件不一致：consent 豁免绕过的是「要不要问用户」这一步本身，
+    // 它不伪造授予记录 —— 所以系统软件的 state 恒为 NOT_REQUESTED，而内核的
+    // AllowedAt 恒为 true。照 state 显示的话，文件管理器的「用户文件」开关是
+    // 关闭的，而它实际能读写用户目录：开关与事实相反。
+    val authoritative = grant.effectiveGranted
+
+    // 豁免的判据：内核说能用，但用户从没做过任何决定。
+    //
+    // 普通应用不会落到这个组合上 —— 它要能用就必须 state == GRANTED，
+    // 那是用户点头的结果。
+    val exempt = grant.effectiveGranted &&
+        grant.state == GrantState.GRANT_STATE_NOT_REQUESTED
+
     val checked = pending[grant.permissionId] ?: authoritative
 
     ListItem(
@@ -235,6 +249,15 @@ private fun PermissionRow(app: PermissionUi, packageId: String, grant: Permissio
             val desc = grant.description.zhCn.ifEmpty { grant.description.en }
             Column {
                 if (desc.isNotEmpty()) Text(desc)
+                // 豁免要说明原因。一个打开却拨不动的开关不给解释，用户只会
+                // 以为界面坏了 —— 而这里的事实是「它是系统的一部分，撤不掉」
+                if (exempt) {
+                    Text(
+                        "系统应用，此权限随系统一同授予，不可关闭",
+                        color = MaterialTheme.colorScheme.outline,
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                }
                 failure?.let {
                     Text(
                         it,
@@ -247,6 +270,10 @@ private fun PermissionRow(app: PermissionUi, packageId: String, grant: Permissio
         trailingContent = {
             Switch(
                 checked = checked,
+                // 豁免的开关不可拨动：拨它没有意义，内核会以
+                // FAILED_PRECONDITION 拒掉（系统软件的运行期状态不由用户决定）。
+                // 让它可拨等于给用户一个按下去只会报错的开关
+                enabled = !exempt,
                 onCheckedChange = { want ->
                     // 用户在动这个界面 —— 一次并发的权限申请结束后不能把它收走。
                     // 必须在这里也置位，不能只靠 OpenManager：从桌面直接打开本
