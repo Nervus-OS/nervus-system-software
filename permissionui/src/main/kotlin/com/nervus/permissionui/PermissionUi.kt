@@ -267,25 +267,45 @@ class PermissionUi(config: ComponentConfig) : NervusApp(config) {
     val managerFilter: StateFlow<String> get() = _managerFilter
 
     /**
-     * `OpenManager` 到达时的处理：收窄筛选并把窗口拉到前台。
+     * `OpenManager` 到达时の处理：收窄筛选并把窗口拉到前台。
      *
      * 由 [PermissionUiEndpoint] 在 dispatch 线程上调用，**不做任何裁决**——
      * 调用方有没有资格打开本界面由内核按 `required_permission` 判定，
      * 这里只负责照做。
+     *
+     * # 为什么状态同步更新、窗口操作异步执行
+     *
+     * SDK 的 dispatch 跑在读取循环上（`NervusClient.handleDispatch` 是同步调用）。
+     * `activateWindow` 最坏 50 次 × (2s timeout + 100ms sleep) ≈ 105s，在这里
+     * 同步等它就等于把读取循环整条占住：本进程连自己的 DispatchResult 都发不出去，
+     * 调用方（设置）等不到响应，30s 后 TimeoutException。
+     *
+     * 与 [onRequestPermission] 完全对称：在 dispatch 线程上只做纯内存赋值（快），
+     * 把所有涉及 I/O 或阻塞的操作交给工作线程异步执行。
      */
     fun onOpenManager(packageId: String) {
         log.info("openManager packageId='${packageId.ifEmpty { "(all)" }}'")
-        // 用户主动要看这个界面（从设置跳进来），申请结束后不能把它收走
+        // 用户主动要看这个界面（从设置跳进来），申请结束后不能把它收走。
+        // 【这两行必须在 dispatch 线程上同步执行】：它们是纯内存写，不阻塞；
+        // 放到工作线程会在 handler 返回（即 DispatchResult 发出）之后才执行，
+        // 产生一个"设置已经收到成功响应、但权限界面状态还没更新"的窗口。
         windowWanted = true
         _managerFilter.value = packageId
-        // 【必须 show】：窗口可能正被隐藏着（上一次权限申请答完之后自己退下去了）。
-        // 那种情况下进程活着、endpoint 有效，所以内核【不会】重新拉起本组件，
-        // 也就不会有新窗口自动出现——不 show 的话调用方看起来什么都没发生。
-        window.show()
-        // 激活失败只记日志不抛：筛选状态已经改好了，用户手动切到本窗口仍能
-        // 看到正确的内容。为一次窗口激活失败让整个调用失败是不成比例的
-        if (!X11WindowControl.activateWindow(WINDOW_TITLE)) {
-            log.warning("openManager: cannot activate window '$WINDOW_TITLE'")
+        // 【window.show + activateWindow 异步化】。
+        //
+        // window.show() 只是 StateFlow 赋值，本身极快，但 activateWindow 最坏
+        // 阻塞 ~105s。把两者一起丢进工作线程：既保证 show() 总在 activate 之前，
+        // 也让 dispatch 线程立刻返回。
+        requestWorker.execute {
+            // 【必须 show】：窗口可能正被隐藏着（上一次权限申请答完后退下去了）。
+            // 那种情况进程活着、endpoint 有效，内核不会重新拉起，不 show 就
+            // 看起来什么都没发生。
+            window.show()
+            // 激活失败只记日志不抛：筛选状态已经改好了，用户手动切到本窗口
+            // 仍能看到正确内容。为一次窗口激活失败让整个调用失败是不成比例的。
+            if (!X11WindowControl.activateWindow(WINDOW_TITLE)) {
+                log.warning("openManager: cannot activate window '$WINDOW_TITLE'")
+            }
         }
     }
 
